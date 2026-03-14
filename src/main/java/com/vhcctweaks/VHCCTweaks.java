@@ -31,8 +31,8 @@ public class VHCCTweaks {
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
 
         // Register custom Lua API for CC:Tweaked computers
-        // Saves test results to <instance>/vhcctweaks_test_results/
-        VHCCTweaksAPI.setOutputDir(FMLPaths.GAMEDIR.get().resolve("vhcctweaks_test_results"));
+        // Provides vhcc.write/read/append/list/etc. sandboxed to <instance>/vhcc_data/
+        VHCCTweaksAPI.setRootDir(FMLPaths.GAMEDIR.get().resolve("vhcc_data"));
         ComputerCraftAPI.registerAPIFactory(computer -> new VHCCTweaksAPI());
     }
 }

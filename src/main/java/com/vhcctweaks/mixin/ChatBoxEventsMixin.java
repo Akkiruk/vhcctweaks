@@ -1,6 +1,8 @@
 package com.vhcctweaks.mixin;
 
 import com.vhcctweaks.VHCCTweaks;
+import net.minecraftforge.event.CommandEvent;
+import net.minecraftforge.event.ServerChatEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,44 +26,33 @@ public class ChatBoxEventsMixin {
      * and stripping the '$'. The message goes through normally as plain text.
      */
     @Inject(method = "onChatBox", at = @At("HEAD"), cancellable = true)
-    private static void vhcctweaks_blockHiddenChatChannel(Object event, CallbackInfo ci) {
+    private static void vhcctweaks_blockHiddenChatChannel(ServerChatEvent event, CallbackInfo ci) {
         try {
-            // Access the message via reflection to check for '$' prefix
-            // ServerChatEvent.getMessage() returns the raw string
-            java.lang.reflect.Method getMsg = event.getClass().getMethod("getMessage");
-            String message = (String) getMsg.invoke(event);
+            String message = event.getMessage();
             if (message != null && message.startsWith("$")) {
-                // Cancel AP's handler entirely — let the message go through normally
-                // (with the $ still visible, treating it as a normal character)
                 ci.cancel();
                 VHCCTweaks.LOGGER.debug("Blocked AP hidden chat channel ($ prefix) for message");
             }
         } catch (Exception e) {
-            // If reflection fails, let AP handle it normally
-            VHCCTweaks.LOGGER.debug("ChatBox event mixin reflection error: {}", e.getMessage());
+            VHCCTweaks.LOGGER.debug("ChatBox event mixin error: {}", e.getMessage());
         }
     }
 
     /**
      * Intercept the onCommand handler (CommandEvent).
-     * Same fix for /say commands with '$' prefix.
+     * Blocks AP from suppressing /say commands where the message starts with '$'.
+     * Only targets "say $..." to avoid interfering with unrelated commands.
      */
     @Inject(method = "onCommand", at = @At("HEAD"), cancellable = true)
-    private static void vhcctweaks_blockHiddenCommandChannel(Object event, CallbackInfo ci) {
-        // For /say commands, we simply prevent AP from canceling them when they have '$'
-        // This is a blanket fix — if AP's handler would suppress the command, we block that
+    private static void vhcctweaks_blockHiddenCommandChannel(CommandEvent event, CallbackInfo ci) {
         try {
-            java.lang.reflect.Method getParseResults = event.getClass().getMethod("getParseResults");
-            Object parseResults = getParseResults.invoke(event);
-            java.lang.reflect.Method getReader = parseResults.getClass().getMethod("getReader");
-            Object reader = getReader.invoke(parseResults);
-            String fullCommand = reader.toString();
-            if (fullCommand.contains("$")) {
+            String fullCommand = event.getParseResults().getReader().getString();
+            if (fullCommand.matches("(?i)^/?say\\s+\\$.*")) {
                 ci.cancel();
-                VHCCTweaks.LOGGER.debug("Blocked AP hidden command channel ($ prefix)");
+                VHCCTweaks.LOGGER.debug("Blocked AP hidden command channel (say $ prefix)");
             }
         } catch (Exception e) {
-            // If reflection fails, let AP handle it normally
+            // If something fails, let AP handle it normally
         }
     }
 }

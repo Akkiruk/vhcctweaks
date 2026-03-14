@@ -257,22 +257,37 @@ public class VaultConfigPatcher {
 
     /**
      * Patches an existing world's computercraft-server.toml to disable HTTP.
-     * Only modifies the http.enabled and http.websocket_enabled lines, preserving
-     * all other settings the player may have customized.
+     * Scopes replacements to the [http] section to avoid modifying unrelated settings.
      */
     private static void patchExistingServerConfig(Path configPath) throws IOException {
         String content = Files.readString(configPath, StandardCharsets.UTF_8);
         if (content.contains("# Patched by VH CC Tweaks")) return; // Already done
 
-        String patched = content;
-        // Disable HTTP
-        patched = patched.replaceAll("(?m)^(\\s*)enabled\\s*=\\s*true", "$1enabled = false");
-        // Disable WebSockets
-        patched = patched.replaceAll("(?m)^(\\s*)websocket_enabled\\s*=\\s*true", "$1websocket_enabled = false");
+        // Scope-aware patching: only modify 'enabled' inside the [http] section
+        // Split by sections, patch only the [http] block
+        StringBuilder patched = new StringBuilder();
+        boolean inHttpSection = false;
+        boolean changed = false;
+        for (String line : content.split("\n", -1)) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("[")) {
+                inHttpSection = trimmed.equals("[http]");
+            }
+            if (inHttpSection) {
+                if (trimmed.matches("enabled\\s*=\\s*true")) {
+                    line = line.replaceFirst("enabled\\s*=\\s*true", "enabled = false");
+                    changed = true;
+                } else if (trimmed.matches("websocket_enabled\\s*=\\s*true")) {
+                    line = line.replaceFirst("websocket_enabled\\s*=\\s*true", "websocket_enabled = false");
+                    changed = true;
+                }
+            }
+            patched.append(line).append("\n");
+        }
 
-        if (!patched.equals(content)) {
-            patched = patched + "\n# Patched by VH CC Tweaks\n";
-            Files.writeString(configPath, patched, StandardCharsets.UTF_8);
+        if (changed) {
+            patched.append("# Patched by VH CC Tweaks\n");
+            Files.writeString(configPath, patched.toString(), StandardCharsets.UTF_8);
             VHCCTweaks.LOGGER.info("Disabled HTTP in existing world config: {}", configPath.getFileName());
         }
     }

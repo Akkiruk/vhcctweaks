@@ -9,16 +9,29 @@ license="MIT"
   description='''
 Balances CC:Tweaked and Advanced Peripherals for Vault Hunters 3rd Edition.
 
-- Completely blocks all CC:Tweaked and AP blocks/items inside the Vault dimension
-- Mixin-level block on turtle.craft() until Automatic Genius research is unlocked
-- Strips crafting table upgrade from turtle items as backup enforcement
-- Replaces CC and AP recipes to require Chromatic Iron/Steel from vaults
-- Auto-patches VH research gates and vault blacklists for both mods
-- Disables HTTP API to prevent downloading exploit scripts
-- Patches AP configs: disables chunk loading, geo scanning, block reading, inventory management, end automata, husbandry automata
-- Increases overpowered automata break chance, enables pocket fuel consumption
-- Mixin blocks isSlimeChunk() to prevent world seed reverse-engineering
-- Mixin removes hidden $ chat channel and blocks sendFormattedMessage spoofing
+Core Features:
+- Research gates for CC:Tweaked and Advanced Peripherals in the VH skill tree
+- Mixin-level block on turtle.craft() until Automatic Genius is researched
+- Inventory sweep strips crafting upgrade from turtle items as backup
+- All CC and AP blocks/items blocked inside the Vault dimension
+- 20 recipe overrides requiring Chromatic Iron/Steel from vaults
+- HTTP API and WebSockets fully disabled
+- Wireless modem range reduced, command computers disabled
+
+Security Mixins:
+- Blocks isSlimeChunk() to prevent world seed reverse-engineering
+- Removes hidden $ chat channel from AP ChatBox events
+- Blocks sendFormattedMessage to prevent message spoofing
+
+AP Config Patches:
+- Disables chunk loading, geo scanning, block reading, inventory management
+- Disables end automata and husbandry automata cores
+- Increases overpowered automata break chance to 5%%
+
+Custom Lua API:
+- Sandboxed filesystem API (vhcc) on all CC computers
+- Server-side and client-side file operations
+- Strict path validation and write limits
 '''
 
 [[mixins]]

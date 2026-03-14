@@ -6,7 +6,8 @@
     "TurtleCraftCommandMixin",
     "EnvironmentDetectorMixin",
     "ChatBoxEventsMixin",
-    "ChatBoxPeripheralMixin"
+    "ChatBoxPeripheralMixin",
+    "RecipeResolverMixin"
   ],
   "injectors": {
     "defaultRequire": 1

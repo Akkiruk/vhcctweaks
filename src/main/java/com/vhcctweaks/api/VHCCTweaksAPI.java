@@ -115,15 +115,15 @@ public class VHCCTweaksAPI implements ILuaAPI {
     }
 
     /**
-     * Get the real filesystem path where files are stored.
-     * Lua: local path = vhcc.getBasePath()
+     * Get the name of the data folder (without exposing the full server path).
+     * Lua: local name = vhcc.getBasePath()  -- returns "vhcc_data"
      */
     @LuaFunction
     public final String getBasePath() throws Exception {
         if (rootDir == null) {
             throw new Exception("vhcc: root directory not configured");
         }
-        return rootDir.toAbsolutePath().toString();
+        return rootDir.getFileName().toString();
     }
 
     /**

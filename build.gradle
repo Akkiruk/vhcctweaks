@@ -42,6 +42,9 @@ dependencies {
     // Advanced Peripherals (compile-only, for Mixin targets)
     compileOnly files("../mods/AdvancedPeripherals-1.18.2-0.7.31r.jar")
 
+    // JEI (compile-only, for RecipeResolver mixin to fix JEI showing default recipes)
+    compileOnly files("../mods/jei-1.18.2-9.7.2.1001.jar")
+
     // Mixin annotation processor for refmap generation
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }

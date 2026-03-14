@@ -46,24 +46,24 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 
 All AP-targeting mixins use string `targets` (not class references) so they gracefully no-op if AP is not installed.
 
-### Recipe Overrides (20 Recipes)
-All CC:Tweaked and AP crafting recipes are replaced to require Vault-tier materials:
+### Recipe Overrides (via CraftTweaker)
+All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials using CraftTweaker scripts in the `scripts/` folder. A JEI mixin suppresses CC's built-in impostor recipes so JEI only shows the VH versions.
 
-**CC:Tweaked (15 recipes)**
+**CC:Tweaked (23 recipes — `scripts/ComputerCraft.zs`)**
 | Tier | Material | Items |
 |------|----------|-------|
-| Basic | Chromatic Iron Ingot | Computer, Disk Drive, Printer, Speaker, Wired Modem, Wireless Modem, Monitor, Cable (6x), Turtle |
-| Advanced | Chromatic Steel Ingot | Advanced Computer, Advanced Wireless Modem, Advanced Monitor, Advanced Turtle |
-| Upgrade | 8× Chromatic Iron | Normal → Advanced Computer/Turtle upgrade |
+| Basic | Chromatic Iron + Larimar | Computer, Monitor, Speaker, Printer, Disk Drive, Wired Modem, Wireless Modem, Cable (6×), Turtle, Pocket Computer, Floppy Disk, Printed Page/Pages/Book, Wired Modem Full conversions |
+| Advanced | Chromatic Steel + Perfect Larimar | Advanced Computer (direct + upgrade), Advanced Monitor, Advanced Wireless Modem, Advanced Turtle (direct + upgrade), Advanced Pocket Computer (direct + upgrade) |
 
-**Advanced Peripherals (5 recipes)**
-| Item | Key Material |
-|------|-------------|
-| Peripheral Casing | Chromatic Iron Ingot |
-| AR Goggles | Chromatic Iron Ingot |
-| Memory Card | Chromatic Iron Ingot |
-| Chunk Controller | Chromatic Steel Ingot |
-| Weak Automata Core | 2× Chromatic Steel Ingot |
+**Advanced Peripherals (20 recipes — `scripts/AdvancedPeripherals.zs`)**
+| Tier | Material | Items |
+|------|----------|-------|
+| Base | Iron + Chromatic Iron | Peripheral Casing |
+| Basic | Chromatic Iron + Larimar | Chat Box, Player Detector, Redstone Integrator, Environment Detector, Computer Tool, AR Goggles, Memory Card |
+| Mid | Chromatic Iron + Perfect Larimar | Inventory Manager, NBT Storage, AR Controller |
+| Powerful | Chromatic Steel + Perfect Larimar | Energy Detector, Block Reader, Geo Scanner, Chunk Controller |
+| Bridges | Chromatic Steel + Mod Components | ME Bridge (AE2), RS Bridge (Refined Storage) |
+| Automata | Chromatic Steel + Vault Diamond | Weak Automata Core, Overpowered Weak/End/Husbandry Automata Cores |
 
 ### HTTP & Network Lockdown
 - HTTP API and WebSockets **disabled** in both `defaultconfigs/` and all existing world `serverconfig/` directories
@@ -116,7 +116,10 @@ vhcc.clientDelete("file.txt")
 
 1. Download `vhcctweaks-2.0.0.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
-3. Launch the game — all config patching happens automatically on first startup
+3. Copy `scripts/ComputerCraft.zs` and `scripts/AdvancedPeripherals.zs` from this repo into your instance's `scripts/` folder
+4. Launch the game — all config patching happens automatically on first startup
+
+> **Note:** The `.zs` scripts require [CraftTweaker](https://modrinth.com/mod/crafttweaker) and [JEITweaker](https://modrinth.com/mod/jeitweaker) (both included in Vault Hunters). The scripts are fully self-contained — each one removes the default recipes and adds VH replacements, so no edits to other files are needed.
 
 **Requirements**: CC:Tweaked must be installed. Advanced Peripherals is optional — AP-related features activate only if AP is present.
 

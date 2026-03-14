@@ -8,9 +8,13 @@ All notable changes to VH CC Tweaks are documented here.
 - **Advanced Peripherals support**: Full exploit coverage for AP alongside CC:Tweaked
   - Research gate for AP in the VH Handling skill group (2 Knowledge Stars)
   - AP blocks/items blocked inside the Vault dimension
-  - 5 AP recipe overrides requiring Chromatic Iron/Steel
   - AP config patching (disables chunk loading, geo scanning, block reading, inventory management, end automata, husbandry automata)
   - Increased overpowered automata break chance to 5%
+- **CraftTweaker recipe scripts** (`scripts/` folder): Self-contained `.zs` files replace all default recipes
+  - `ComputerCraft.zs` — 23 recipes covering every craftable CC:Tweaked item
+  - `AdvancedPeripherals.zs` — 20 recipes covering every craftable AP item
+  - Each script removes default recipes + adds VH versions — just copy to `scripts/`
+- **RecipeResolverMixin**: Suppresses CC:Tweaked's JEI impostor recipe plugin so JEI only shows VH recipes
 - **Security mixins for Advanced Peripherals**
   - `EnvironmentDetectorMixin`: Blocks `isSlimeChunk()` to prevent world seed reverse-engineering
   - `ChatBoxEventsMixin`: Removes hidden `$` chat channel that suppresses messages from normal chat

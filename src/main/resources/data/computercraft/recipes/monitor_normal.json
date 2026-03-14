@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SGS",
+    "SCS"
+  ],
+  "key": {
+    "S": { "item": "minecraft:stone" },
+    "G": { "item": "minecraft:glass_pane" },
+    "C": { "item": "the_vault:chromatic_iron_ingot" }
+  },
+  "result": {
+    "item": "computercraft:monitor_normal",
+    "count": 1
+  }
+}

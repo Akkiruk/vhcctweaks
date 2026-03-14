@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GGG",
+    "GEG",
+    "GCG"
+  ],
+  "key": {
+    "G": { "item": "minecraft:gold_ingot" },
+    "E": { "item": "minecraft:ender_pearl" },
+    "C": { "item": "the_vault:chromatic_steel_ingot" }
+  },
+  "result": {
+    "item": "computercraft:wireless_modem_advanced"
+  }
+}

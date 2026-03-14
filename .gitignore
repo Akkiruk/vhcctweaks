@@ -1,0 +1,26 @@
+# Gradle
+build/
+.gradle/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.launch
+.settings/
+.classpath
+.project
+bin/
+
+# Runtime
+run/
+logs/
+crash-reports/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.class
+TurtlePermissions.class

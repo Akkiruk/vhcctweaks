@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CIC",
+    "IPI",
+    "CXC"
+  ],
+  "key": {
+    "C": { "item": "the_vault:chromatic_iron_ingot" },
+    "I": { "item": "minecraft:iron_ingot" },
+    "P": { "item": "computercraft:computer_normal" },
+    "X": { "item": "minecraft:chest" }
+  },
+  "result": {
+    "item": "computercraft:turtle_normal"
+  }
+}

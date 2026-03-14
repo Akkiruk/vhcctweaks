@@ -1,0 +1,19 @@
+{
+  "type": "forge:conditional",
+  "conditions": [],
+  "recipe": {
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+      "III",
+      "ICI",
+      "III"
+    ],
+    "key": {
+      "I": { "item": "the_vault:chromatic_iron_ingot" },
+      "C": { "item": "computercraft:turtle_normal" }
+    },
+    "result": {
+      "item": "computercraft:turtle_advanced"
+    }
+  }
+}

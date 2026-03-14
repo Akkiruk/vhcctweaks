@@ -1,0 +1,56 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '5.1.+'
+    id 'java'
+}
+
+version = mod_version
+group = mod_group
+archivesBaseName = mod_id
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: mappings_channel, version: mappings_version
+
+    runs {
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                vhcctweaks {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = "SquidDev"
+        url = "https://squiddev.cc/maven/"
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // CC:Tweaked API (compile-only, it's already in the modpack at runtime)
+    compileOnly "org.squiddev:cc-tweaked-${minecraft_version}:${cc_version}"
+
+    // Mixin annotation processor for refmap generation
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+jar {
+    manifest {
+        attributes([
+            "Specification-Title"   : mod_id,
+            "Specification-Version" : "1",
+            "Implementation-Title"  : project.name,
+            "Implementation-Version": mod_version,
+            "MixinConfigs"          : "vhcctweaks.mixins.json",
+        ])
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.vhcctweaks.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "TurtleCraftCommandMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.8"
+}

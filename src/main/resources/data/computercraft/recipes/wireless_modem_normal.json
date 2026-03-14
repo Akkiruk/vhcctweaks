@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SES",
+    "SCS"
+  ],
+  "key": {
+    "S": { "item": "minecraft:stone" },
+    "E": { "item": "minecraft:ender_pearl" },
+    "C": { "item": "the_vault:chromatic_iron_ingot" }
+  },
+  "result": {
+    "item": "computercraft:wireless_modem_normal"
+  }
+}

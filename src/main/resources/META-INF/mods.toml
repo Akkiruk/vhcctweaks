@@ -1,0 +1,49 @@
+modLoader="javafml"
+loaderVersion="[40,)"
+license="MIT"
+
+[[mods]]
+  modId="vhcctweaks"
+  version="${file.jarVersion}"
+  displayName="VH CC Tweaks"
+  description='''
+Balances CC:Tweaked for Vault Hunters 3rd Edition.
+
+- Completely blocks all CC:Tweaked blocks/items inside the Vault dimension
+- Mixin-level block on turtle.craft() until Automatic Genius research is unlocked
+- Strips crafting table upgrade from turtle items as backup enforcement
+- Replaces CC recipes to require Chromatic Iron/Steel from vaults
+- Auto-patches VH research gates and vault blacklists
+- Disables HTTP API to prevent downloading exploit scripts
+'''
+
+[[mixins]]
+  config="vhcctweaks.mixins.json"
+
+[[dependencies.vhcctweaks]]
+  modId="forge"
+  mandatory=true
+  versionRange="[40,)"
+  ordering="NONE"
+  side="BOTH"
+
+[[dependencies.vhcctweaks]]
+  modId="minecraft"
+  mandatory=true
+  versionRange="[1.18.2,1.19)"
+  ordering="NONE"
+  side="BOTH"
+
+[[dependencies.vhcctweaks]]
+  modId="computercraft"
+  mandatory=true
+  versionRange="[1.101,)"
+  ordering="AFTER"
+  side="BOTH"
+
+[[dependencies.vhcctweaks]]
+  modId="the_vault"
+  mandatory=false
+  versionRange="[0,)"
+  ordering="AFTER"
+  side="BOTH"

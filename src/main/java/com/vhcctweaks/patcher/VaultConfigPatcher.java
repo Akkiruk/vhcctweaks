@@ -167,21 +167,40 @@ public class VaultConfigPatcher {
         }
         writeServerConfigIfNeeded(defaultConfigs.resolve("computercraft-server.toml"));
 
-        // 2) Patch existing world serverconfigs so existing worlds get the fix too
+        // 2) Patch existing world serverconfigs (singleplayer: saves/*/serverconfig/)
         Path savesDir = instanceDir.resolve("saves");
         if (Files.exists(savesDir) && Files.isDirectory(savesDir)) {
             try (var worlds = Files.list(savesDir)) {
                 worlds.filter(Files::isDirectory).forEach(worldDir -> {
-                    Path worldServerConfig = worldDir.resolve("serverconfig/computercraft-server.toml");
-                    if (Files.exists(worldServerConfig)) {
-                        try {
-                            patchExistingServerConfig(worldServerConfig);
-                        } catch (IOException e) {
-                            VHCCTweaks.LOGGER.warn("Could not patch server config in {}: {}",
-                                    worldDir.getFileName(), e.getMessage());
-                        }
-                    }
+                    patchWorldServerConfig(worldDir);
                 });
+            }
+        }
+
+        // 3) Patch dedicated server world serverconfig (world/serverconfig/)
+        //    The server root is the same as instanceDir (parent of config/)
+        //    Dedicated servers use level-name (default "world") as the world folder
+        Path serverWorldDir = instanceDir.resolve("world");
+        if (Files.exists(serverWorldDir) && Files.isDirectory(serverWorldDir)) {
+            patchWorldServerConfig(serverWorldDir);
+        }
+        // Also check common alternative names
+        for (String altName : new String[]{"World", "server-world"}) {
+            Path altDir = instanceDir.resolve(altName);
+            if (Files.exists(altDir) && Files.isDirectory(altDir)) {
+                patchWorldServerConfig(altDir);
+            }
+        }
+    }
+
+    private static void patchWorldServerConfig(Path worldDir) {
+        Path worldServerConfig = worldDir.resolve("serverconfig/computercraft-server.toml");
+        if (Files.exists(worldServerConfig)) {
+            try {
+                patchExistingServerConfig(worldServerConfig);
+            } catch (IOException e) {
+                VHCCTweaks.LOGGER.warn("Could not patch server config in {}: {}",
+                        worldDir.getFileName(), e.getMessage());
             }
         }
     }

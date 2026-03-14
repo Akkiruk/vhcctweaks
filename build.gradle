@@ -39,6 +39,9 @@ dependencies {
     // CC:Tweaked API (compile-only, it's already in the modpack at runtime)
     compileOnly "org.squiddev:cc-tweaked-${minecraft_version}:${cc_version}"
 
+    // Advanced Peripherals (compile-only, for Mixin targets)
+    compileOnly files("../mods/AdvancedPeripherals-1.18.2-0.7.31r.jar")
+
     // Mixin annotation processor for refmap generation
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }

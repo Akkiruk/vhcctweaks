@@ -18,6 +18,7 @@ import java.nio.file.Path;
 public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String CC_WILDCARD = "computercraft:*";
+    private static final String AP_WILDCARD = "advancedperipherals:*";
 
     public static void patchIfNeeded(Path configDir) {
         try {
@@ -50,6 +51,11 @@ public class VaultConfigPatcher {
         } catch (Exception e) {
             VHCCTweaks.LOGGER.warn("Could not patch skill_descriptions.json: {}", e.getMessage());
         }
+        try {
+            patchAPConfigs(configDir);
+        } catch (Exception e) {
+            VHCCTweaks.LOGGER.warn("Could not patch Advanced Peripherals configs: {}", e.getMessage());
+        }
     }
 
     private static void patchVaultBlacklists(Path configDir) throws IOException {
@@ -71,6 +77,11 @@ public class VaultConfigPatcher {
                 changed = true;
                 VHCCTweaks.LOGGER.info("Added {} to vault ITEM_BLACKLIST", CC_WILDCARD);
             }
+            if (!arrayContains(items, AP_WILDCARD)) {
+                items.add(AP_WILDCARD);
+                changed = true;
+                VHCCTweaks.LOGGER.info("Added {} to vault ITEM_BLACKLIST", AP_WILDCARD);
+            }
         }
 
         // Add to BLOCK_BLACKLIST
@@ -80,6 +91,11 @@ public class VaultConfigPatcher {
                 blocks.add(CC_WILDCARD);
                 changed = true;
                 VHCCTweaks.LOGGER.info("Added {} to vault BLOCK_BLACKLIST", CC_WILDCARD);
+            }
+            if (!arrayContains(blocks, AP_WILDCARD)) {
+                blocks.add(AP_WILDCARD);
+                changed = true;
+                VHCCTweaks.LOGGER.info("Added {} to vault BLOCK_BLACKLIST", AP_WILDCARD);
             }
         }
 
@@ -127,6 +143,31 @@ public class VaultConfigPatcher {
             VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' research (cost 2)");
         }
 
+        // Add Advanced Peripherals research gate
+        if (!hasResearchNamed(researches, "Advanced Peripherals")) {
+            JsonObject apResearch = new JsonObject();
+            JsonArray apModIds = new JsonArray();
+            apModIds.add("advancedperipherals");
+            apResearch.add("modIds", apModIds);
+
+            JsonObject apRestrictions = new JsonObject();
+            JsonObject apRestricts = new JsonObject();
+            apRestricts.addProperty("HITTABILITY", false);
+            apRestricts.addProperty("BLOCK_INTERACTABILITY", true);
+            apRestricts.addProperty("USABILITY", true);
+            apRestricts.addProperty("CRAFTABILITY", true);
+            apRestricts.addProperty("ENTITY_INTERACTABILITY", false);
+            apRestrictions.add("restricts", apRestricts);
+            apResearch.add("restrictions", apRestrictions);
+
+            apResearch.addProperty("name", "Advanced Peripherals");
+            apResearch.addProperty("cost", 2);
+            apResearch.addProperty("usesKnowledge", true);
+            researches.add(apResearch);
+            changed = true;
+            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' research (cost 2)");
+        }
+
         if (changed) {
             Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
@@ -150,10 +191,19 @@ public class VaultConfigPatcher {
         if (!handling.has("research")) return;
 
         JsonArray research = handling.getAsJsonArray("research");
+        boolean changed = false;
         if (!arrayContains(research, "CC: Tweaked")) {
             research.add("CC: Tweaked");
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
+            changed = true;
             VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' to Handling research group");
+        }
+        if (!arrayContains(research, "Advanced Peripherals")) {
+            research.add("Advanced Peripherals");
+            changed = true;
+            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' to Handling research group");
+        }
+        if (changed) {
+            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
     }
 
@@ -292,6 +342,7 @@ public class VaultConfigPatcher {
         if (!root.has("styles")) return;
         JsonObject styles = root.getAsJsonObject("styles");
 
+        boolean guiChanged = false;
         if (!styles.has("CC: Tweaked")) {
             JsonObject ccStyle = new JsonObject();
             ccStyle.addProperty("x", 10);
@@ -299,9 +350,23 @@ public class VaultConfigPatcher {
             ccStyle.addProperty("frameType", "RECTANGULAR");
             ccStyle.addProperty("icon", "the_vault:gui/researches/cc_tweaked");
             styles.add("CC: Tweaked", ccStyle);
-
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
+            guiChanged = true;
             VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' GUI style to researches_gui_styles.json");
+        }
+
+        if (!styles.has("Advanced Peripherals")) {
+            JsonObject apStyle = new JsonObject();
+            apStyle.addProperty("x", 110);
+            apStyle.addProperty("y", 320);
+            apStyle.addProperty("frameType", "RECTANGULAR");
+            apStyle.addProperty("icon", "the_vault:gui/researches/advanced_peripherals");
+            styles.add("Advanced Peripherals", apStyle);
+            guiChanged = true;
+            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' GUI style to researches_gui_styles.json");
+        }
+
+        if (guiChanged) {
+            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
     }
 
@@ -318,6 +383,7 @@ public class VaultConfigPatcher {
         if (!root.has("descriptions")) return;
         JsonObject descriptions = root.getAsJsonObject("descriptions");
 
+        boolean descChanged = false;
         if (!descriptions.has("CC: Tweaked")) {
             JsonArray desc = new JsonArray();
 
@@ -374,10 +440,197 @@ public class VaultConfigPatcher {
             desc.add(line11);
 
             descriptions.add("CC: Tweaked", desc);
-
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
+            descChanged = true;
             VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' description to skill_descriptions.json");
         }
+
+        if (!descriptions.has("Advanced Peripherals")) {
+            JsonArray apDesc = new JsonArray();
+
+            JsonObject ap1 = new JsonObject();
+            ap1.addProperty("text", "Unlocks the ");
+            apDesc.add(ap1);
+
+            JsonObject ap2 = new JsonObject();
+            ap2.addProperty("text", "Advanced Peripherals ");
+            ap2.addProperty("color", "yellow");
+            apDesc.add(ap2);
+
+            JsonObject ap3 = new JsonObject();
+            ap3.addProperty("text", "mod!\n\nThis mod adds powerful peripheral blocks for ");
+            apDesc.add(ap3);
+
+            JsonObject ap4 = new JsonObject();
+            ap4.addProperty("text", "CC: Tweaked");
+            ap4.addProperty("color", "aqua");
+            apDesc.add(ap4);
+
+            JsonObject ap5 = new JsonObject();
+            ap5.addProperty("text", "! Build player detectors, environment scanners, " +
+                    "chat boxes, energy monitors, redstone integrators and more. " +
+                    "Several AP features have been ");
+            apDesc.add(ap5);
+
+            JsonObject ap6 = new JsonObject();
+            ap6.addProperty("text", "disabled");
+            ap6.addProperty("color", "gold");
+            apDesc.add(ap6);
+
+            JsonObject ap7 = new JsonObject();
+            ap7.addProperty("text", " for balance: ");
+            apDesc.add(ap7);
+
+            JsonObject ap8 = new JsonObject();
+            ap8.addProperty("text", "chunk loading");
+            ap8.addProperty("color", "gold");
+            apDesc.add(ap8);
+
+            JsonObject ap9 = new JsonObject();
+            ap9.addProperty("text", ", ");
+            apDesc.add(ap9);
+
+            JsonObject ap10 = new JsonObject();
+            ap10.addProperty("text", "ore scanning");
+            ap10.addProperty("color", "gold");
+            apDesc.add(ap10);
+
+            JsonObject ap10b = new JsonObject();
+            ap10b.addProperty("text", ", ");
+            apDesc.add(ap10b);
+
+            JsonObject ap10c = new JsonObject();
+            ap10c.addProperty("text", "block reading");
+            ap10c.addProperty("color", "gold");
+            apDesc.add(ap10c);
+
+            JsonObject ap10d = new JsonObject();
+            ap10d.addProperty("text", ", ");
+            apDesc.add(ap10d);
+
+            JsonObject ap10e = new JsonObject();
+            ap10e.addProperty("text", "inventory management");
+            ap10e.addProperty("color", "gold");
+            apDesc.add(ap10e);
+
+            JsonObject ap11 = new JsonObject();
+            ap11.addProperty("text", ", ");
+            apDesc.add(ap11);
+
+            JsonObject ap12 = new JsonObject();
+            ap12.addProperty("text", "teleportation");
+            ap12.addProperty("color", "gold");
+            apDesc.add(ap12);
+
+            JsonObject ap12b = new JsonObject();
+            ap12b.addProperty("text", ", ");
+            apDesc.add(ap12b);
+
+            JsonObject ap12c = new JsonObject();
+            ap12c.addProperty("text", "animal capture");
+            ap12c.addProperty("color", "gold");
+            apDesc.add(ap12c);
+
+            JsonObject ap12d = new JsonObject();
+            ap12d.addProperty("text", " and ");
+            apDesc.add(ap12d);
+
+            JsonObject ap12e = new JsonObject();
+            ap12e.addProperty("text", "message spoofing");
+            ap12e.addProperty("color", "gold");
+            apDesc.add(ap12e);
+
+            JsonObject ap13 = new JsonObject();
+            ap13.addProperty("text", ". Slime chunk detection is ");
+            apDesc.add(ap13);
+
+            JsonObject ap14 = new JsonObject();
+            ap14.addProperty("text", "blocked");
+            ap14.addProperty("color", "gold");
+            apDesc.add(ap14);
+
+            JsonObject ap15 = new JsonObject();
+            ap15.addProperty("text", " to protect the world seed. Overpowered automata have an increased ");
+            apDesc.add(ap15);
+
+            JsonObject ap16 = new JsonObject();
+            ap16.addProperty("text", "break chance");
+            ap16.addProperty("color", "gold");
+            apDesc.add(ap16);
+
+            JsonObject ap17 = new JsonObject();
+            ap17.addProperty("text", ". AP items cannot be brought into the vaults.");
+            apDesc.add(ap17);
+
+            descriptions.add("Advanced Peripherals", apDesc);
+            descChanged = true;
+            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' description to skill_descriptions.json");
+        }
+
+        if (descChanged) {
+            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
+        }
+    }
+
+    // --- Advanced Peripherals Config Patching ---
+
+    private static void patchAPConfigs(Path configDir) throws IOException {
+        Path apDir = configDir.resolve("Advancedperipherals");
+        if (!Files.exists(apDir)) {
+            VHCCTweaks.LOGGER.info("Advancedperipherals config dir not found, skipping AP config patches");
+            return;
+        }
+
+        // Patch peripherals.toml
+        Path peripheralsToml = apDir.resolve("peripherals.toml");
+        if (Files.exists(peripheralsToml)) {
+            String content = Files.readString(peripheralsToml, StandardCharsets.UTF_8);
+            if (!content.contains("# Patched by VH CC Tweaks")) {
+                content = patchTomlBool(content, "enableChunkyTurtle", false);
+                content = patchTomlBool(content, "enableBlockReader", false);
+                content = patchTomlBool(content, "enableInventoryManager", false);
+                content = patchTomlBool(content, "enableGeoScanner", false);
+                content = patchTomlBool(content, "disablePocketFuelConsumption", false);
+                content += "\n# Patched by VH CC Tweaks\n";
+                Files.writeString(peripheralsToml, content, StandardCharsets.UTF_8);
+                VHCCTweaks.LOGGER.info("Patched AP peripherals.toml (disabled Chunky Turtle, Block Reader, Inventory Manager, Geo Scanner; enabled pocket fuel)");
+            }
+        }
+
+        // Patch metaphysics.toml
+        Path metaphysicsToml = apDir.resolve("metaphysics.toml");
+        if (Files.exists(metaphysicsToml)) {
+            String content = Files.readString(metaphysicsToml, StandardCharsets.UTF_8);
+            if (!content.contains("# Patched by VH CC Tweaks")) {
+                content = patchTomlBool(content, "enableEndAutomataCore", false);
+                content = patchTomlBool(content, "enableHusbandryAutomataCore", false);
+                content = patchTomlDouble(content, "overpoweredAutomataBreakChance", 0.05);
+                content += "\n# Patched by VH CC Tweaks\n";
+                Files.writeString(metaphysicsToml, content, StandardCharsets.UTF_8);
+                VHCCTweaks.LOGGER.info("Patched AP metaphysics.toml (disabled End Automata, Husbandry Automata, increased break chance to 5%%)");
+            }
+        }
+
+        // Patch world.toml
+        Path worldToml = apDir.resolve("world.toml");
+        if (Files.exists(worldToml)) {
+            String content = Files.readString(worldToml, StandardCharsets.UTF_8);
+            if (!content.contains("# Patched by VH CC Tweaks")) {
+                content = patchTomlBool(content, "givePlayerBookOnJoin", false);
+                content += "\n# Patched by VH CC Tweaks\n";
+                Files.writeString(worldToml, content, StandardCharsets.UTF_8);
+                VHCCTweaks.LOGGER.info("Patched AP world.toml (disabled book on join)");
+            }
+        }
+    }
+
+    private static String patchTomlBool(String content, String key, boolean value) {
+        return content.replaceAll("(?m)^(\\s*)" + key + "\\s*=\\s*(true|false)",
+                "$1" + key + " = " + value);
+    }
+
+    private static String patchTomlDouble(String content, String key, double value) {
+        return content.replaceAll("(?m)^(\\s*)" + key + "\\s*=\\s*[\\d.]+",
+                "$1" + key + " = " + value);
     }
 
     // --- Helpers ---

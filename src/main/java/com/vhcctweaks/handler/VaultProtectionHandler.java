@@ -15,11 +15,15 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.Set;
+
 /**
  * Prevents all CC:Tweaked block placement, interaction, and item use
  * inside the Vault dimension.
  */
 public class VaultProtectionHandler {
+
+    private static final Set<String> PROTECTED_NAMESPACES = Set.of("computercraft", "advancedperipherals");
 
     private static boolean isVaultDimension(Level level) {
         if (!ModConfig.BLOCK_CC_IN_VAULT.get()) return false;
@@ -29,13 +33,13 @@ public class VaultProtectionHandler {
 
     private static boolean isCCBlock(BlockState state) {
         ResourceLocation id = ForgeRegistries.BLOCKS.getKey(state.getBlock());
-        return id != null && id.getNamespace().equals("computercraft");
+        return id != null && PROTECTED_NAMESPACES.contains(id.getNamespace());
     }
 
     private static boolean isCCItem(ItemStack stack) {
         if (stack.isEmpty()) return false;
         ResourceLocation id = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        return id != null && id.getNamespace().equals("computercraft");
+        return id != null && PROTECTED_NAMESPACES.contains(id.getNamespace());
     }
 
     private static void notifyPlayer(Player player, String message) {
@@ -50,7 +54,7 @@ public class VaultProtectionHandler {
             Level level = player.level;
             if (isVaultDimension(level) && isCCBlock(event.getPlacedBlock())) {
                 event.setCanceled(true);
-                notifyPlayer(player, "CC:Tweaked blocks are disabled inside the Vault!");
+                notifyPlayer(player, "Modded peripherals are disabled inside the Vault!");
             }
         }
     }
@@ -60,17 +64,17 @@ public class VaultProtectionHandler {
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         Level level = event.getWorld();
         if (isVaultDimension(level)) {
-            // Block interacting with CC blocks
+            // Block interacting with CC/AP blocks
             BlockState state = level.getBlockState(event.getPos());
             if (isCCBlock(state)) {
                 event.setCanceled(true);
-                notifyPlayer(event.getPlayer(), "CC:Tweaked blocks are disabled inside the Vault!");
+                notifyPlayer(event.getPlayer(), "Modded peripherals are disabled inside the Vault!");
                 return;
             }
-            // Block using CC items
+            // Block using CC/AP items
             if (isCCItem(event.getItemStack())) {
                 event.setCanceled(true);
-                notifyPlayer(event.getPlayer(), "CC:Tweaked items are disabled inside the Vault!");
+                notifyPlayer(event.getPlayer(), "Modded peripheral items are disabled inside the Vault!");
             }
         }
     }
@@ -80,7 +84,7 @@ public class VaultProtectionHandler {
     public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
         if (isVaultDimension(event.getWorld()) && isCCItem(event.getItemStack())) {
             event.setCanceled(true);
-            notifyPlayer(event.getPlayer(), "CC:Tweaked items are disabled inside the Vault!");
+            notifyPlayer(event.getPlayer(), "Modded peripheral items are disabled inside the Vault!");
         }
     }
 

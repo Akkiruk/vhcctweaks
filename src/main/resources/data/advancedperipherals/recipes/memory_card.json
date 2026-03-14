@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "IWI",
+    "IOI",
+    " G "
+  ],
+  "key": {
+    "I": { "tag": "forge:ingots/iron" },
+    "W": { "tag": "forge:glass/white" },
+    "O": { "item": "minecraft:observer" },
+    "G": { "item": "the_vault:chromatic_iron_ingot" }
+  },
+  "result": {
+    "item": "advancedperipherals:memory_card"
+  }
+}

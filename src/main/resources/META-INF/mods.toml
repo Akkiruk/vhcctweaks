@@ -7,14 +7,18 @@ license="MIT"
   version="${file.jarVersion}"
   displayName="VH CC Tweaks"
   description='''
-Balances CC:Tweaked for Vault Hunters 3rd Edition.
+Balances CC:Tweaked and Advanced Peripherals for Vault Hunters 3rd Edition.
 
-- Completely blocks all CC:Tweaked blocks/items inside the Vault dimension
+- Completely blocks all CC:Tweaked and AP blocks/items inside the Vault dimension
 - Mixin-level block on turtle.craft() until Automatic Genius research is unlocked
 - Strips crafting table upgrade from turtle items as backup enforcement
-- Replaces CC recipes to require Chromatic Iron/Steel from vaults
-- Auto-patches VH research gates and vault blacklists
+- Replaces CC and AP recipes to require Chromatic Iron/Steel from vaults
+- Auto-patches VH research gates and vault blacklists for both mods
 - Disables HTTP API to prevent downloading exploit scripts
+- Patches AP configs: disables chunk loading, geo scanning, block reading, inventory management, end automata, husbandry automata
+- Increases overpowered automata break chance, enables pocket fuel consumption
+- Mixin blocks isSlimeChunk() to prevent world seed reverse-engineering
+- Mixin removes hidden $ chat channel and blocks sendFormattedMessage spoofing
 '''
 
 [[mixins]]
@@ -43,6 +47,13 @@ Balances CC:Tweaked for Vault Hunters 3rd Edition.
 
 [[dependencies.vhcctweaks]]
   modId="the_vault"
+  mandatory=false
+  versionRange="[0,)"
+  ordering="AFTER"
+  side="BOTH"
+
+[[dependencies.vhcctweaks]]
+  modId="advancedperipherals"
   mandatory=false
   versionRange="[0,)"
   ordering="AFTER"

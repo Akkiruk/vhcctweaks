@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "RAR",
+    "DSD",
+    "RLR"
+  ],
+  "key": {
+    "A": { "item": "advancedperipherals:peripheral_casing" },
+    "R": { "tag": "forge:storage_blocks/redstone" },
+    "S": { "item": "minecraft:soul_lantern" },
+    "D": { "item": "the_vault:chromatic_steel_ingot" },
+    "L": {
+      "type": "forge:nbt",
+      "item": "minecraft:potion",
+      "count": 1,
+      "nbt": "{Potion:\"minecraft:long_regeneration\"}"
+    }
+  },
+  "result": {
+    "item": "advancedperipherals:weak_automata_core"
+  }
+}

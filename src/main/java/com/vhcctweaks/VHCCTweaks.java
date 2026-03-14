@@ -1,9 +1,11 @@
 package com.vhcctweaks;
 
+import com.vhcctweaks.api.VHCCTweaksAPI;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.CraftingLockHandler;
 import com.vhcctweaks.handler.VaultProtectionHandler;
 import com.vhcctweaks.patcher.VaultConfigPatcher;
+import dan200.computercraft.api.ComputerCraftAPI;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
@@ -27,5 +29,10 @@ public class VHCCTweaks {
 
         // Patch VH config files early (adds CC entries to blacklists/researches)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
+
+        // Register custom Lua API for CC:Tweaked computers
+        // Saves test results to <instance>/vhcctweaks_test_results/
+        VHCCTweaksAPI.setOutputDir(FMLPaths.GAMEDIR.get().resolve("vhcctweaks_test_results"));
+        ComputerCraftAPI.registerAPIFactory(computer -> new VHCCTweaksAPI());
     }
 }

@@ -1,8 +1,12 @@
 package com.vhcctweaks.api;
 
 import com.vhcctweaks.VHCCTweaks;
+import com.vhcctweaks.handler.ComputerInteractionTracker;
+import com.vhcctweaks.network.ClientFilePacket;
+import com.vhcctweaks.network.VHCCNetwork;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaFunction;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,6 +41,11 @@ public class VHCCTweaksAPI implements ILuaAPI {
     private static final int MAX_PATH_DEPTH = 16;
 
     private static Path rootDir;
+    private final int computerId;
+
+    public VHCCTweaksAPI(int computerId) {
+        this.computerId = computerId;
+    }
 
     public static void setRootDir(Path dir) {
         rootDir = dir;
@@ -49,30 +58,24 @@ public class VHCCTweaksAPI implements ILuaAPI {
 
     // ===== Path validation =====
 
-    private Path resolve(String path) throws Exception {
-        if (rootDir == null) {
-            throw new Exception("vhcc: root directory not configured");
-        }
+    /**
+     * Validate path segments without resolving against a root directory.
+     * Used by both server-side resolve() and client-write functions.
+     */
+    static void validatePath(String path) throws Exception {
         if (path == null || path.isEmpty()) {
             throw new Exception("vhcc: path cannot be empty");
         }
-
-        // Normalize separators
         String normalized = path.replace('\\', '/');
-
-        // No absolute paths
         if (normalized.startsWith("/")) {
             throw new Exception("vhcc: absolute paths not allowed");
         }
-
-        // Split and validate each segment
         String[] segments = normalized.split("/");
         if (segments.length > MAX_PATH_DEPTH) {
             throw new Exception("vhcc: path too deep (max " + MAX_PATH_DEPTH + " levels)");
         }
-
         for (String seg : segments) {
-            if (seg.isEmpty()) continue; // skip double slashes
+            if (seg.isEmpty()) continue;
             if (seg.equals("..") || seg.equals(".")) {
                 throw new Exception("vhcc: '..' and '.' not allowed in paths");
             }
@@ -81,7 +84,15 @@ public class VHCCTweaksAPI implements ILuaAPI {
                         "' - use letters, numbers, dashes, underscores, dots");
             }
         }
+    }
 
+    private Path resolve(String path) throws Exception {
+        if (rootDir == null) {
+            throw new Exception("vhcc: root directory not configured");
+        }
+        validatePath(path);
+
+        String normalized = path.replace('\\', '/');
         Path resolved = rootDir.resolve(normalized).normalize();
 
         // Final containment check
@@ -355,5 +366,69 @@ public class VHCCTweaksAPI implements ILuaAPI {
         } catch (IOException e) {
             throw new Exception("vhcc: copy failed - " + e.getMessage());
         }
+    }
+
+    // ===== Client-side file operations =====
+    // These send a network packet to the last player who interacted with
+    // this computer. The file is written on the CLIENT's local disk.
+    // Returns {true} on success or {false, "error message"} on failure.
+
+    /**
+     * Write/overwrite a file on the client's local disk.
+     * Lua: local ok, err = vhcc.clientWrite("logs/data.txt", "content")
+     */
+    @LuaFunction
+    public final Object[] clientWrite(String path, String content) throws Exception {
+        return sendToClient(ClientFilePacket.OP_WRITE, path, content);
+    }
+
+    /**
+     * Append to a file on the client's local disk.
+     * Lua: local ok, err = vhcc.clientAppend("logs/data.txt", "new line\n")
+     */
+    @LuaFunction
+    public final Object[] clientAppend(String path, String content) throws Exception {
+        return sendToClient(ClientFilePacket.OP_APPEND, path, content);
+    }
+
+    /**
+     * Create a directory on the client's local disk.
+     * Lua: local ok, err = vhcc.clientMakeDir("logs/subdir")
+     */
+    @LuaFunction
+    public final Object[] clientMakeDir(String path) throws Exception {
+        return sendToClient(ClientFilePacket.OP_MAKE_DIR, path, null);
+    }
+
+    /**
+     * Delete a file on the client's local disk.
+     * Lua: local ok, err = vhcc.clientDelete("logs/old.txt")
+     */
+    @LuaFunction
+    public final Object[] clientDelete(String path) throws Exception {
+        return sendToClient(ClientFilePacket.OP_DELETE, path, null);
+    }
+
+    private Object[] sendToClient(byte op, String path, String content) {
+        // Validate content size
+        if (content != null && content.length() > MAX_WRITE_SIZE) {
+            return new Object[]{false, "content too large (max " + (MAX_WRITE_SIZE / 1024) + " KB)"};
+        }
+        // Validate path early so the Lua caller gets immediate feedback
+        try {
+            validatePath(path);
+        } catch (Exception e) {
+            return new Object[]{false, e.getMessage()};
+        }
+        // Look up the last player who interacted with this computer
+        ServerPlayer player = ComputerInteractionTracker.getPlayer(computerId);
+        if (player == null) {
+            return new Object[]{false, "no player has interacted with this computer"};
+        }
+        if (player.hasDisconnected()) {
+            return new Object[]{false, "player is no longer connected"};
+        }
+        VHCCNetwork.sendToClient(player, new ClientFilePacket(op, path, content));
+        return new Object[]{true};
     }
 }

@@ -2,7 +2,6 @@ package com.vhcctweaks;
 
 import com.vhcctweaks.api.VHCCTweaksAPI;
 import com.vhcctweaks.ccvault.CCVaultAPI;
-import com.vhcctweaks.ccvault.EscrowService;
 import com.vhcctweaks.ccvault.SessionAuthManager;
 import com.vhcctweaks.ccvault.TransactionLedger;
 import com.vhcctweaks.ccvault.TransferService;
@@ -18,7 +17,6 @@ import dan200.computercraft.api.ComputerCraftAPI;
 import dan200.computercraft.api.detail.DetailRegistries;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -66,7 +64,6 @@ public class VHCCTweaks {
         ComputerPlacementTracker.init(dataDir);
         TransactionLedger.init(dataDir);
         TransferService.init(dataDir);
-        EscrowService.init(dataDir);
         ComputerCraftAPI.registerAPIFactory(computer -> new CCVaultAPI(computer.getID()));
 
         // Vault item detail provider — enriches getItemDetail() with VH item data
@@ -82,20 +79,8 @@ public class VHCCTweaks {
     public static void onServerStarted(ServerStartedEvent event) {
         // Run WAL crash recovery after server is fully loaded
         TransferService.recover();
-        EscrowService.recover();
-        LOGGER.info("CCVault: WAL + escrow recovery complete");
+        LOGGER.info("CCVault: WAL recovery complete");
     }
 
-    // Tick counter for periodic escrow expiry checks (every ~30 seconds = 600 ticks)
-    private static int escrowTickCounter = 0;
 
-    @SubscribeEvent
-    public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        escrowTickCounter++;
-        if (escrowTickCounter >= 600) {
-            escrowTickCounter = 0;
-            EscrowService.tickExpired();
-        }
-    }
 }

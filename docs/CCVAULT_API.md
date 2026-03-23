@@ -249,55 +249,30 @@ Each entry contains: `txId`, `from`, `to`, `amount`, `reason`, `computerId`, `pl
 
 ---
 
-### Escrow
+### Transfer-at-End Pattern
 
-The escrow system holds tokens server-side between deduction and resolution. If the game crashes, tokens auto-refund to the player after a configurable timeout.
+CCVault now uses transfer-at-end for game economies.
 
-| Function | Returns | Auth Required |
-|----------|---------|:---:|
-| `ccvault.escrow(amount, reason)` | `{success, escrowId, amount, timeoutSeconds}` \| `nil, error` | **Yes** |
-| `ccvault.resolveEscrow(escrowId, recipient, reason)` | `{success, txId}` \| `nil, error` | **Yes** |
-| `ccvault.cancelEscrow(escrowId, reason)` | `{success, txId}` \| `nil, error` | **Yes** |
-| `ccvault.getEscrowInfo(escrowId)` | `{escrowId, amount, reason, timeRemaining, status}` \| `nil` | **Yes** |
+- Keep bet state local while the round is in progress.
+- On round end, perform exactly one settlement transfer:
+    - player wins -> `ccvault.transfer("host", "player", amount, reason)`
+    - player loses -> `ccvault.transfer("player", "host", amount, reason)`
+    - push -> no transfer
 
-**`escrow(amount, reason)`** — Deducts tokens from the player and holds them in server-side escrow. Returns an `escrowId` for later resolution.
-
-**`resolveEscrow(escrowId, recipient, reason)`** — Sends held tokens to `"player"` (refund/push) or `"host"` (player lost). This is the normal resolution path.
-
-**`cancelEscrow(escrowId, reason)`** — Cancels the escrow and returns tokens to the original source (player).
-
-**`getEscrowInfo(escrowId)`** — Check the status and remaining time on an active escrow.
-
-#### Escrow Flow Example (Blackjack)
+#### Round Settlement Example (Blackjack)
 
 ```lua
--- 1. Player places bet → tokens held in escrow
-local hold, err = ccvault.escrow(100, "blackjack bet")
-if not hold then error("Escrow failed: " .. err) end
-local escrowId = hold.escrowId
+local bet = 100
+local result = "player_win" -- player_win | player_loss | push
 
--- 2. Game plays out...
-
--- 3a. Player LOSES → host claims the escrow
-ccvault.resolveEscrow(escrowId, "host", "player busted")
-
--- 3b. Player WINS → return bet to player, then pay winnings from host
-ccvault.resolveEscrow(escrowId, "player", "player won - returning bet")
-ccvault.transfer("host", "player", winnings, "blackjack winnings")
-
--- 3c. PUSH → return bet to player
-ccvault.resolveEscrow(escrowId, "player", "push - returning bet")
-
--- 3d. If nothing happens (crash), tokens auto-refund after timeout
+if result == "player_win" then
+        local tx, err = ccvault.transfer("host", "player", bet, "blackjack payout")
+        if not tx then error(err) end
+elseif result == "player_loss" then
+        local tx, err = ccvault.transfer("player", "host", bet, "blackjack loss")
+        if not tx then error(err) end
+end
 ```
-
-#### Auto-Refund
-
-If an escrow is not resolved within the configured timeout (default: 5 minutes), the server automatically refunds the tokens to the player. This protects against:
-
-- Game script crashes mid-round
-- Server restarts during a game
-- Scripts that forget to resolve escrows
 
 ---
 
@@ -319,10 +294,6 @@ If an escrow is not resolved within the configured timeout (default: 5 minutes),
 | `player rate limit exceeded` | Player making too many transfers (default: 20/min) |
 | `economy system not available` | PlayerShops not installed |
 | `transfer partially failed — will be recovered automatically` | Server crashed mid-transfer; WAL will fix it on restart |
-| `escrow not found or already resolved` | Invalid or already-used escrow ID |
-| `escrow belongs to a different computer` | Security: escrows are computer-bound |
-| `escrow expired — tokens auto-refunded to source` | Timeout passed |
-| `too many active escrows on this computer` | Per-computer escrow cap hit (default: 5) |
 
 ---
 
@@ -352,8 +323,6 @@ end
 | Terminal rate limit | 10/min | Max transfers per computer per minute |
 | Player rate limit | 20/min | Max transfers per player per minute |
 | Interaction staleness | 30 seconds | Right-click must be this recent for financial ops |
-| Escrow timeout | 300 seconds | How long before an escrow auto-refunds |
-| Max escrows per computer | 5 | Active escrow limit per terminal |
 | Max history results | 50 | Max entries returned by getTransactionHistory |
 
 Server admins can change all of these in the vhcctweaks server config.
@@ -378,7 +347,6 @@ Server admins can change all of these in the vhcctweaks server config.
 - ✅ All transfers are permanently logged with TX ID, amounts, parties, reason, and timestamp
 - ✅ Crash-safe execution via Write-Ahead Log (incomplete transfers auto-recover on restart)
 - ✅ Auth prompts are unforgeable server chat messages with clickable approve buttons
-- ✅ Escrow holds auto-refund to the player on crash or timeout
 - ✅ Transaction history is filtered to only show the requesting player's own data
 - ✅ Self-transfers are explicitly tagged as test mode in the ledger
 

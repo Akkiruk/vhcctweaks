@@ -246,62 +246,29 @@ end
 
 
 -- ============================================================================
---  10. ESCROW SYSTEM (auth required)
+--  10. TRANSFER-AT-END BETTING PATTERN (auth required)
 -- ============================================================================
 
--- The escrow system solves the "payout fails after charge" problem.
--- Instead of immediately giving tokens to the host on a bet:
---   1. Hold tokens in server-side escrow
---   2. Play the game
---   3. Resolve the escrow to the winner
--- If anything goes wrong (crash, timeout), tokens auto-refund to the player.
+-- CCVault now uses transfer-at-end for game economies.
+-- Keep bets local while the round is in progress, then settle once:
+--   * player wins -> host pays profit to player
+--   * player loses -> player pays bet to host
+--   * push        -> no transfer
 
--- escrow(amount, reason)
---   -> {success, escrowId, amount, timeoutSeconds} | nil, error
---   Deducts from player, holds in escrow. Returns escrowId.
-
--- resolveEscrow(escrowId, recipient, reason)
---   -> {success, txId} | nil, error
---   Sends held tokens to "player" or "host".
-
--- cancelEscrow(escrowId, reason)
---   -> {success, txId} | nil, error
---   Returns held tokens to the original source (player).
-
--- getEscrowInfo(escrowId)
---   -> {escrowId, amount, reason, timeRemaining, status} | nil
---   Check status of an active escrow.
-
--- EXAMPLE: Casino game with escrow
-local hold, err = ccvault.escrow(100, "blackjack bet")
-if not hold then
-    print("Could not place bet: " .. (err or "unknown"))
-    return
-end
-
-local escrowId = hold.escrowId
-print("Bet placed! Escrow: " .. escrowId)
-print("Auto-refund in " .. hold.timeoutSeconds .. " seconds if not resolved")
-
--- ... play the game ...
-
--- Check escrow status mid-game:
-local escrowInfo = ccvault.getEscrowInfo(escrowId)
-if escrowInfo then
-    print("Time remaining: " .. escrowInfo.timeRemaining .. "s")
-end
-
--- Resolve based on outcome:
-local playerWon = true -- (determined by game logic)
+-- EXAMPLE: Casino round settlement
+local bet = 100
+local playerWon = true -- game logic result
 
 if playerWon then
-    -- Return the bet to the player
-    ccvault.resolveEscrow(escrowId, "player", "player won - bet returned")
-    -- Pay the winnings separately from host
-    ccvault.transfer("host", "player", 100, "blackjack winnings")
+    local ok, tx = ccvault.transfer("host", "player", bet, "blackjack: win payout")
+    if not ok then
+        print("Payout failed: " .. tostring(tx))
+    end
 else
-    -- Host claims the lost bet
-    ccvault.resolveEscrow(escrowId, "host", "player lost - house wins")
+    local ok, tx = ccvault.transfer("player", "host", bet, "blackjack: loss")
+    if not ok then
+        print("Charge failed: " .. tostring(tx))
+    end
 end
 
 
@@ -398,10 +365,6 @@ end
 --  ccvault.transferSelf(amount, reason)             -> {success,txId,testMode} | nil, error
 --  ccvault.verifyTransaction(txId)                 -> table | nil
 --  ccvault.getTransactionHistory(limit)            -> table (array)
---  ccvault.escrow(amount, reason)                  -> {success,escrowId,amount,timeoutSeconds} | nil, error
---  ccvault.resolveEscrow(escrowId, target, reason) -> {success,txId} | nil, error
---  ccvault.cancelEscrow(escrowId, reason)          -> {success,txId} | nil, error
---  ccvault.getEscrowInfo(escrowId)                 -> table | nil
 
 
 -- ============================================================================

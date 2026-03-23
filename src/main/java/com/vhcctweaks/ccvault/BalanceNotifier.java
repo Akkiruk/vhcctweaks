@@ -19,9 +19,6 @@ import java.util.UUID;
  * <ul>
  *   <li><b>Debit</b>: tokens removed (transfers to another player)</li>
  *   <li><b>Credit</b>: tokens added (transfers from another player)</li>
- *   <li><b>Bet placed</b>: escrow hold — tokens locked until game resolves</li>
- *   <li><b>Bet returned</b>: escrow refund — tokens returned after win/push/cancel</li>
- *   <li><b>Bet settled</b>: informational — player's escrowed bet went to the house</li>
  * </ul>
  *
  * <p>Self-play (player == host) handling:
@@ -80,90 +77,6 @@ public class BalanceNotifier {
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
                 .append(new TextComponent("+" + NUM_FMT.format(amount) + " tokens").withStyle(ChatFormatting.GREEN))
                 .append(new TextComponent(" | " + reason).withStyle(ChatFormatting.GRAY))
-                .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
-
-        player.sendMessage(msg, player.getUUID());
-    }
-
-    /**
-     * Notify a player that tokens are held in escrow (deducted but not yet awarded).
-     * Shows as "Bet placed" for clarity.
-     *
-     * @param uuid     the affected player's UUID
-     * @param amount   positive token amount held
-     * @param reason   human-readable reason (e.g. "Blackjack: bet")
-     * @param selfPlay true if the player is also the host (testing own machine)
-     */
-    public static void notifyEscrowHold(UUID uuid, long amount, String reason, boolean selfPlay) {
-        ServerPlayer player = getPlayer(uuid);
-        if (player == null) return;
-
-        long newBalance = DogBridge.getBalance(uuid);
-        String tag = selfPlay ? " [self-play]" : "";
-
-        MutableComponent msg = new TextComponent("")
-                .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                .append(new TextComponent("-" + NUM_FMT.format(amount) + " tokens").withStyle(ChatFormatting.RED))
-                .append(new TextComponent(" | Bet placed: " + reason + tag).withStyle(ChatFormatting.GRAY))
-                .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
-
-        player.sendMessage(msg, player.getUUID());
-    }
-
-    /** Backwards-compatible overload (non-self-play). */
-    public static void notifyEscrowHold(UUID uuid, long amount, String reason) {
-        notifyEscrowHold(uuid, amount, reason, false);
-    }
-
-    /**
-     * Notify a player that escrowed tokens were returned to them
-     * (win, push, cancel, or crash recovery).
-     *
-     * @param uuid     the affected player's UUID
-     * @param amount   positive token amount refunded
-     * @param reason   human-readable reason
-     * @param selfPlay true if the player is also the host
-     */
-    public static void notifyEscrowRefund(UUID uuid, long amount, String reason, boolean selfPlay) {
-        ServerPlayer player = getPlayer(uuid);
-        if (player == null) return;
-
-        long newBalance = DogBridge.getBalance(uuid);
-        String tag = selfPlay ? " [self-play]" : "";
-
-        MutableComponent msg = new TextComponent("")
-                .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                .append(new TextComponent("+" + NUM_FMT.format(amount) + " tokens").withStyle(ChatFormatting.GREEN))
-                .append(new TextComponent(" | Returned: " + reason + tag).withStyle(ChatFormatting.GRAY))
-                .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
-
-        player.sendMessage(msg, player.getUUID());
-    }
-
-    /** Backwards-compatible overload (non-self-play). */
-    public static void notifyEscrowRefund(UUID uuid, long amount, String reason) {
-        notifyEscrowRefund(uuid, amount, reason, false);
-    }
-
-    /**
-     * Informational notification: player's escrowed bet was settled (they lost).
-     * No balance change — the escrow was already deducted — but gives closure.
-     * Only sent in non-self-play; in self-play the escrow refund handles it.
-     *
-     * @param uuid   the player who placed the bet
-     * @param amount the bet amount that was lost
-     * @param reason human-readable reason (e.g. "Blackjack: dealer wins")
-     */
-    public static void notifyBetSettled(UUID uuid, long amount, String reason) {
-        ServerPlayer player = getPlayer(uuid);
-        if (player == null) return;
-
-        long newBalance = DogBridge.getBalance(uuid);
-
-        MutableComponent msg = new TextComponent("")
-                .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                .append(new TextComponent("Bet settled").withStyle(ChatFormatting.YELLOW))
-                .append(new TextComponent(" | " + reason + " (-" + NUM_FMT.format(amount) + ")").withStyle(ChatFormatting.GRAY))
                 .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
 
         player.sendMessage(msg, player.getUUID());

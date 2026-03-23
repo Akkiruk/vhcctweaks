@@ -20,8 +20,6 @@ public class ModConfig {
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_TRANSFERS_PER_MIN_PLAYER;
     public static final ForgeConfigSpec.LongValue CCVAULT_MAX_TRANSFER_AMOUNT;
     public static final ForgeConfigSpec.IntValue CCVAULT_INTERACTION_STALE_SECONDS;
-    public static final ForgeConfigSpec.IntValue CCVAULT_ESCROW_TIMEOUT_SECONDS;
-    public static final ForgeConfigSpec.IntValue CCVAULT_MAX_ESCROWS_PER_COMPUTER;
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_HISTORY_RESULTS;
 
     static {
@@ -73,14 +71,6 @@ public class ModConfig {
                 .comment("How many seconds before a player interaction with a computer is considered stale.",
                          "Financial operations require a fresh interaction within this window.")
                 .defineInRange("interactionStaleSeconds", 30, 5, 300);
-        CCVAULT_ESCROW_TIMEOUT_SECONDS = builder
-                .comment("How many seconds an escrow hold remains active before auto-refunding.",
-                         "If a game crashes mid-bet, held tokens return to the player after this timeout.")
-                .defineInRange("escrowTimeoutSeconds", 300, 30, 3600);
-        CCVAULT_MAX_ESCROWS_PER_COMPUTER = builder
-                .comment("Maximum active escrow holds per computer at once.",
-                         "Prevents scripts from locking large amounts of tokens in escrow.")
-                .defineInRange("maxEscrowsPerComputer", 5, 1, 20);
         CCVAULT_MAX_HISTORY_RESULTS = builder
                 .comment("Maximum number of transaction history entries a script can retrieve at once.")
                 .defineInRange("maxHistoryResults", 50, 1, 200);

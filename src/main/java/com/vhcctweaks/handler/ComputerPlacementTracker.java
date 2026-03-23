@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.vhcctweaks.VHCCTweaks;
-import com.vhcctweaks.ccvault.EscrowService;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -84,12 +83,6 @@ public class ComputerPlacementTracker {
 
         int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(be);
         if (computerId < 0) return;
-
-        // Immediately refund any active escrows held by this computer
-        int refunded = EscrowService.refundAllForComputer(computerId);
-        if (refunded > 0) {
-            VHCCTweaks.LOGGER.info("CCVault: Computer {} broken — refunded {} escrow(s)", computerId, refunded);
-        }
     }
 
     /** Get the UUID of the player who placed the computer, or null if unknown. */

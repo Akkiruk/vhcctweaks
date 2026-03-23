@@ -15,7 +15,6 @@ Core Features:
 - Inventory sweep strips crafting upgrade from turtle items as backup
 - All CC and AP blocks/items blocked inside the Vault dimension
 - 20 recipe overrides requiring Chromatic Iron/Steel from vaults
-- HTTP API and WebSockets enabled by default
 - Wireless modem range reduced, command computers disabled
 
 Security Mixins:

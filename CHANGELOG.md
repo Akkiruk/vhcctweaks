@@ -58,7 +58,6 @@ All notable changes to VH CC Tweaks are documented here.
 - **CRITICAL**: `ChatBoxEventsMixin` used `Object` parameter types instead of `ServerChatEvent`/`CommandEvent`, causing a hard crash (`InvalidInjectionException`) that prevented the game from launching when Advanced Peripherals was installed
 - `ChatBoxEventsMixin` `onCommand` handler now only targets `/say $...` commands instead of any command containing `$`
 - Removed unnecessary reflection in `ChatBoxEventsMixin` — now uses direct Forge event type methods
-- `VaultConfigPatcher` HTTP disabling now scoped to the `[http]` section instead of matching any `enabled = true` line
 - `vhcc.getBasePath()` no longer exposes the full server filesystem path (returns folder name only)
 
 ### Changed
@@ -79,6 +78,5 @@ All notable changes to VH CC Tweaks are documented here.
 - Turtle autocrafting lock behind Automatic Genius research (mixin + event + inventory sweep)
 - Vault dimension protection (blocks all CC blocks/items in vaults)
 - 15 CC:Tweaked recipe overrides requiring Chromatic Iron/Steel
-- HTTP API and WebSocket lockdown
-- Auto-config patching for VH JSON files and CC server config
+- Auto-config patching for VH JSON files
 - Reduced wireless modem range, disabled command computers

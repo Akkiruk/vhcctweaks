@@ -72,7 +72,6 @@ All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials us
 | Automata | Chromatic Steel + Vault Diamond | Weak Automata Core, Overpowered Weak/End/Husbandry Automata Cores |
 
 ### Network Configuration
-- HTTP API and WebSockets **enabled** by default
 - Command computers **disabled**
 - Wireless modem range **reduced** (32/64 blocks normal, 16/32 in storms)
 - Patches applied idempotently with marker comments to prevent re-patching
@@ -168,20 +167,19 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 
 ## Testing
 
-A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with 12 test groups:
+A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with 11 test groups:
 
 0. Environment detection
-1. HTTP API enabled
-2. Turtle craft research gate
-3. Vault dimension protection
-4. isSlimeChunk blocked
-5. ChatBox hidden `$` channel
-6. sendFormattedMessage blocked
-7. AP disabled peripherals (config)
-8. Recipe overrides (manual JEI check)
-9. VH research entries
-10. Allowed features verification
-11. Client-side file writing
+1. Turtle craft research gate
+2. Vault dimension protection
+3. isSlimeChunk blocked
+4. ChatBox hidden `$` channel
+5. sendFormattedMessage blocked
+6. AP disabled peripherals (config)
+7. Recipe overrides (manual JEI check)
+8. VH research entries
+9. Allowed features verification
+10. Client-side file writing
 
 Run it on a CC computer or turtle in-game. Results are saved to both the CC filesystem and the real filesystem via the `vhcc` API.
 

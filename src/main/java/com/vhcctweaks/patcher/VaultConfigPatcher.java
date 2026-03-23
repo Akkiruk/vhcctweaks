@@ -13,7 +13,6 @@ import java.nio.file.Path;
  * This ensures:
  * - computercraft:* is in the vault item/block blacklists
  * - CC:Tweaked has a research gate
- * - CC server config is set up in defaultconfigs
  */
 public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -35,11 +34,6 @@ public class VaultConfigPatcher {
             patchResearchGroups(configDir);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.warn("Could not patch researches_groups.json: {}", e.getMessage());
-        }
-        try {
-            patchServerConfig(configDir);
-        } catch (Exception e) {
-            VHCCTweaks.LOGGER.warn("Could not patch computercraft server config: {}", e.getMessage());
         }
         try {
             patchResearchGuiStyles(configDir);
@@ -207,97 +201,7 @@ public class VaultConfigPatcher {
         }
     }
 
-    private static void patchServerConfig(Path configDir) throws IOException {
-        Path instanceDir = configDir.getParent();
 
-        // 1) Write defaultconfigs for new worlds
-        Path defaultConfigs = instanceDir.resolve("defaultconfigs");
-        if (!Files.exists(defaultConfigs)) {
-            Files.createDirectories(defaultConfigs);
-        }
-        writeServerConfigIfNeeded(defaultConfigs.resolve("computercraft-server.toml"));
-
-        // 2) Ensure HTTP is enabled in all existing per-world configs
-        Path savesDir = instanceDir.resolve("saves");
-        if (Files.exists(savesDir) && Files.isDirectory(savesDir)) {
-            try (var worlds = Files.newDirectoryStream(savesDir)) {
-                for (Path world : worlds) {
-                    Path serverConfig = world.resolve("serverconfig/computercraft-server.toml");
-                    if (Files.exists(serverConfig)) {
-                        enableHttpInConfig(serverConfig);
-                    }
-                }
-            }
-        }
-    }
-
-    private static void enableHttpInConfig(Path configPath) throws IOException {
-        String content = Files.readString(configPath, StandardCharsets.UTF_8);
-        String updated = content;
-
-        // Enable HTTP API
-        updated = updated.replaceAll(
-                "(?m)(^\\s*#[^\\n]*\\n)*\\s*enabled\\s*=\\s*false",
-                "$0".replaceFirst("enabled\\s*=\\s*false", "enabled = true")
-        );
-
-        // Simpler approach: direct line-based replacements
-        updated = content;
-        updated = updated.replace("\tenabled = false", "\tenabled = true");
-        updated = updated.replace("\twebsocket_enabled = false", "\twebsocket_enabled = true");
-        updated = updated.replace("        enabled = false", "        enabled = true");
-        updated = updated.replace("        websocket_enabled = false", "        websocket_enabled = true");
-
-        if (!updated.equals(content)) {
-            Files.writeString(configPath, updated, StandardCharsets.UTF_8);
-            VHCCTweaks.LOGGER.info("Enabled HTTP in {}", configPath);
-        }
-    }
-
-    private static void writeServerConfigIfNeeded(Path serverConfigPath) throws IOException {
-
-        String config = """
-                # CC:Tweaked server config - managed by VH CC Tweaks mod
-                # VH CC Tweaks
-                
-                [general]
-                \tcomputer_space_limit = 1000000
-                \tfloppy_space_limit = 125000
-                \tmaximum_open_files = 128
-                \tdisable_lua51_features = false
-                \tdefault_computer_settings = ""
-                \tlog_computer_errors = true
-                
-                [execution]
-                \tmax_main_global_time = 10
-                \tmax_main_computer_time = 5
-                
-                [http]
-                \tenabled = true
-                \twebsocket_enabled = true
-                \tmax_requests = 16
-                \tmax_websockets = 4
-                
-                [peripheral]
-                \tcommand_computers = false
-                \tmodem_range = 32
-                \tmodem_high_altitude_range = 64
-                \tmodem_range_during_storm = 16
-                \tmodem_high_altitude_range_during_storm = 32
-                \tmax_notes_per_tick = 8
-                \tmonitor_bandwidth = 10
-                
-                [turtle]
-                \tneed_fuel = true
-                \tnormal_fuel_limit = 5000
-                \tadvanced_fuel_limit = 50000
-                \tturtle_disabled_actions = false
-                \tcan_push = true
-                """;
-
-        Files.writeString(serverConfigPath, config, StandardCharsets.UTF_8);
-        VHCCTweaks.LOGGER.info("Created/updated computercraft-server.toml in defaultconfigs");
-    }
 
     private static void patchResearchGuiStyles(Path configDir) throws IOException {
         Path path = configDir.resolve("the_vault/researches_gui_styles.json");
@@ -388,26 +292,8 @@ public class VaultConfigPatcher {
             desc.add(line6);
 
             JsonObject line7 = new JsonObject();
-            line7.addProperty("text", " research. ");
+            line7.addProperty("text", " research. CC items cannot be brought into the vaults.");
             desc.add(line7);
-
-            JsonObject line8 = new JsonObject();
-            line8.addProperty("text", "HTTP access");
-            line8.addProperty("color", "green");
-            desc.add(line8);
-
-            JsonObject line9 = new JsonObject();
-            line9.addProperty("text", " is ");
-            desc.add(line9);
-
-            JsonObject line10 = new JsonObject();
-            line10.addProperty("text", "enabled");
-            line10.addProperty("color", "green");
-            desc.add(line10);
-
-            JsonObject line11 = new JsonObject();
-            line11.addProperty("text", ". CC items cannot be brought into the vaults.");
-            desc.add(line11);
 
             descriptions.add("CC: Tweaked", desc);
             descChanged = true;

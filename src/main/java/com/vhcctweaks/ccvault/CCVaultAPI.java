@@ -9,6 +9,7 @@ import dan200.computercraft.api.lua.LuaFunction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import java.util.UUID;
 public class CCVaultAPI implements ILuaAPI {
 
     private static final int MAX_REASON_LENGTH = 64;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final int computerId;
 
@@ -116,6 +118,10 @@ public class CCVaultAPI implements ILuaAPI {
     /**
      * Execute a balanced transfer between "player" and "host".
      * Requires authentication. Amount must be positive.
+     *
+     * When player and host are the same account (self-play), the transfer is
+     * simulated: balance is validated but no money moves. A chat message shows
+     * what WOULD happen, and a ledger entry is logged with [self-play] tag.
      *
      * Lua: local result, err = ccvault.transfer("player", "host", 100, "shop purchase")
      *      if result then print("TX: " .. result.txId) end
@@ -273,9 +279,9 @@ public class CCVaultAPI implements ILuaAPI {
     // ===== Self-Transfer (Test Mode) =====
 
     /**
-     * Execute a self-transfer for testing when player and host are the same account.
-     * The transfer goes through the full pipeline (WAL, ledger, rate limiter) but
-     * is tagged as a test transfer. Net balance effect is zero (debit + credit same account).
+     * Execute a simulated self-transfer for testing when player and host are the same account.
+     * No real money moves — validates balance and logs what WOULD happen.
+     * Returns success with a simulated txId.
      *
      * Requires authentication. Only works when player == host.
      *
@@ -307,19 +313,27 @@ public class CCVaultAPI implements ILuaAPI {
             return new Object[]{null, "transferSelf is only for same-person sessions (player must be host)"};
         }
 
-        // Full pipeline execution: debit + credit same UUID
-        TransferService.TransferResult result = TransferService.execute(
-                playerUuid, playerUuid, amount, "[test] " + reason, computerId, playerUuid, hostUuid);
-
-        if (result.success()) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("txId", result.txId());
-            response.put("success", true);
-            response.put("testMode", true);
-            return new Object[]{response};
-        } else {
-            return new Object[]{null, result.error()};
+        // Self-play simulation: validate balance but don't move money
+        long balance = DogBridge.getBalance(playerUuid);
+        if (balance < 0) {
+            return new Object[]{null, "could not read balance"};
         }
+        if (balance < amount) {
+            return new Object[]{null, "insufficient balance"};
+        }
+
+        String txId = generateSimulatedTxId();
+        TransactionLedger.logTransfer(txId, playerUuid, playerUuid, amount,
+                "[self-play] " + reason, computerId, playerUuid, hostUuid);
+        BalanceNotifier.notifySelfPlay(playerUuid,
+                "Self-transfer: " + amount + " tokens | " + reason);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("txId", txId);
+        response.put("success", true);
+        response.put("testMode", true);
+        response.put("selfPlay", true);
+        return new Object[]{response};
     }
 
     // ===== Transaction Verification =====
@@ -383,6 +397,9 @@ public class CCVaultAPI implements ILuaAPI {
      * The tokens are not given to the host until resolveEscrow() is called.
      * If the server crashes or the escrow times out, tokens auto-refund to the player.
      *
+     * In self-play (player == host), no real money moves — the escrow is simulated
+     * but the full lifecycle (create/resolve/cancel) still works for testing.
+     *
      * Requires authentication.
      *
      * Lua: local result, err = ccvault.escrow(100, "blackjack bet")
@@ -408,11 +425,11 @@ public class CCVaultAPI implements ILuaAPI {
         UUID playerUuid = player.getUUID();
         UUID hostUuid = ComputerPlacementTracker.getOwner(computerId);
 
-        // For self-play, escrow from and to the same person — still useful for testing
         UUID sourceUuid = playerUuid;
+        boolean selfPlay = hostUuid != null && playerUuid.equals(hostUuid);
 
         EscrowService.EscrowResult result = EscrowService.create(
-                sourceUuid, amount, reason, computerId, playerUuid, hostUuid);
+                sourceUuid, amount, reason, computerId, playerUuid, hostUuid, selfPlay);
 
         if (result.success()) {
             Map<String, Object> response = new HashMap<>();
@@ -533,6 +550,16 @@ public class CCVaultAPI implements ILuaAPI {
     }
 
     // ===== Internal helpers =====
+
+    private String generateSimulatedTxId() {
+        byte[] randomBytes = new byte[4];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        StringBuilder hex = new StringBuilder(8);
+        for (byte b : randomBytes) {
+            hex.append(String.format("%02x", b & 0xFF));
+        }
+        return "sim-" + Long.toHexString(System.currentTimeMillis()) + "-" + hex;
+    }
 
     private void requireAuth() throws LuaException {
         ServerPlayer player = getInteractingPlayerOrThrow();

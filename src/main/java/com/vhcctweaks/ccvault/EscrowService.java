@@ -87,9 +87,18 @@ public class EscrowService {
                 case "HELD":
                     // Active escrow with confirmed debit — check if expired
                     if (System.currentTimeMillis() > hold.expiresAt) {
+                        UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+                        if (hold.selfPlay) {
+                            // Self-play: no real money was held — just discard
+                            VHCCTweaks.LOGGER.info("CCVault: Self-play escrow {} expired during downtime — discarding",
+                                    hold.escrowId);
+                            hold.status = "COMPLETED";
+                            writeHold(hold);
+                            Files.deleteIfExists(file);
+                            break;
+                        }
                         VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens to {}",
                                 hold.escrowId, hold.amount, hold.sourceUuid);
-                        UUID sourceUuid = UUID.fromString(hold.sourceUuid);
                         if (DogBridge.add(sourceUuid, hold.amount)) {
                             TransactionLedger.logTransfer(
                                     hold.escrowId + "-refund", sourceUuid, sourceUuid,
@@ -125,6 +134,7 @@ public class EscrowService {
 
     /**
      * Create a new escrow hold. Deducts tokens from the source immediately.
+     * In self-play mode (player == host), no real money moves — the escrow is simulated.
      *
      * @param sourceUuid  UUID of the player providing funds (usually "player")
      * @param amount      positive token amount
@@ -132,10 +142,12 @@ public class EscrowService {
      * @param computerId  computer initiating the escrow
      * @param playerUuid  interacting player's UUID
      * @param hostUuid    computer owner's UUID
+     * @param selfPlay    true if player and host are the same person
      * @return EscrowResult with escrowId on success, or error on failure
      */
     public static EscrowResult create(UUID sourceUuid, long amount, String reason,
-                                       int computerId, UUID playerUuid, UUID hostUuid) {
+                                       int computerId, UUID playerUuid, UUID hostUuid,
+                                       boolean selfPlay) {
         if (amount <= 0) {
             return EscrowResult.fail("amount must be positive");
         }
@@ -163,7 +175,7 @@ public class EscrowService {
             return EscrowResult.fail("economy system not available");
         }
 
-        // Check source balance
+        // Check source balance (even in self-play, to keep game logic realistic)
         long sourceBalance = DogBridge.getBalance(sourceUuid);
         if (sourceBalance < 0) {
             return EscrowResult.fail("could not read source balance");
@@ -181,13 +193,33 @@ public class EscrowService {
         EscrowHold hold = new EscrowHold(escrowId, sourceUuid.toString(), amount, reason,
                 computerId, playerUuid.toString(),
                 hostUuid != null ? hostUuid.toString() : null,
-                expiresAt, "PENDING");
+                expiresAt, "PENDING", selfPlay);
 
         if (!writeHold(hold)) {
             return EscrowResult.fail("internal error: could not write escrow hold");
         }
 
-        // Deduct from source
+        if (selfPlay) {
+            // Self-play: skip real debit — go straight to HELD
+            hold.status = "HELD";
+            if (!writeHold(hold)) {
+                deleteHold(escrowId);
+                return EscrowResult.fail("internal error: could not confirm escrow");
+            }
+            activeEscrows.put(escrowId, hold);
+            RateLimiter.recordTransfer(computerId, playerUuid);
+
+            BalanceNotifier.notifySelfPlay(sourceUuid,
+                    "Simulated bet: " + amount + " tokens | " + reason);
+            TransactionLedger.logTransfer(escrowId, sourceUuid, sourceUuid, amount,
+                    "[self-play] escrow hold: " + reason, computerId, playerUuid, hostUuid);
+
+            VHCCTweaks.LOGGER.info("CCVault: Self-play escrow {} created — {} tokens simulated from {} (computer {})",
+                    escrowId, amount, sourceUuid, computerId);
+            return EscrowResult.success(escrowId);
+        }
+
+        // Normal play: deduct from source
         if (!DogBridge.remove(sourceUuid, amount)) {
             deleteHold(escrowId);
             return EscrowResult.fail("debit failed");
@@ -207,9 +239,8 @@ public class EscrowService {
         activeEscrows.put(escrowId, hold);
         RateLimiter.recordTransfer(computerId, playerUuid);
 
-        // Notify player of escrow hold (with self-play tag if applicable)
-        boolean selfPlay = hostUuid != null && sourceUuid.equals(hostUuid);
-        BalanceNotifier.notifyEscrowHold(sourceUuid, amount, reason, selfPlay);
+        // Notify player of escrow hold
+        BalanceNotifier.notifyEscrowHold(sourceUuid, amount, reason, false);
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} created — {} tokens held from {} (computer {}, timeout {}s)",
                 escrowId, amount, sourceUuid, computerId, ModConfig.CCVAULT_ESCROW_TIMEOUT_SECONDS.get());
@@ -255,6 +286,15 @@ public class EscrowService {
         if (System.currentTimeMillis() > hold.expiresAt) {
             // Auto-refund instead of resolving
             UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+            if (hold.selfPlay) {
+                // Self-play: no real money to refund
+                hold.status = "COMPLETED";
+                writeHold(hold);
+                deleteHold(escrowId);
+                BalanceNotifier.notifySelfPlay(sourceUuid,
+                        "Escrow expired (simulated) | " + hold.reason);
+                return EscrowResult.fail("escrow expired — no balance change (self-play)");
+            }
             if (!DogBridge.add(sourceUuid, hold.amount)) {
                 activeEscrows.put(escrowId, hold); // put back for retry
                 VHCCTweaks.LOGGER.error("CCVault: Escrow {} expired refund FAILED — preserved for retry", escrowId);
@@ -273,6 +313,31 @@ public class EscrowService {
             return EscrowResult.fail("economy system not available");
         }
 
+        // Self-play: skip real credit — just notify and log
+        if (hold.selfPlay) {
+            hold.status = "COMPLETED";
+            writeHold(hold);
+            deleteHold(escrowId);
+
+            String txId = escrowId + "-resolve";
+            UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+            UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+            TransactionLedger.logTransfer(txId, sourceUuid, recipientUuid, hold.amount,
+                    "[self-play] escrow resolve: " + reason, computerId, playerUuid, hostUuid);
+
+            if (recipientUuid.equals(sourceUuid)) {
+                BalanceNotifier.notifySelfPlay(sourceUuid,
+                        "Would return bet: " + hold.amount + " tokens | " + reason);
+            } else {
+                BalanceNotifier.notifySelfPlay(sourceUuid,
+                        "Would lose bet: " + hold.amount + " tokens to host | " + reason);
+            }
+
+            VHCCTweaks.LOGGER.info("CCVault: Self-play escrow {} resolved — {} tokens simulated to {}",
+                    escrowId, hold.amount, recipientUuid);
+            return EscrowResult.success(txId);
+        }
+
         // Credit the recipient
         if (!DogBridge.add(recipientUuid, hold.amount)) {
             activeEscrows.put(escrowId, hold); // put back — credit failed
@@ -289,18 +354,13 @@ public class EscrowService {
         String txId = escrowId + "-resolve";
         UUID sourceUuid = UUID.fromString(hold.sourceUuid);
         UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
-        boolean selfPlay = hostUuid != null && sourceUuid.equals(hostUuid);
         TransactionLedger.logTransfer(txId, sourceUuid, recipientUuid, hold.amount,
                 "escrow resolve: " + reason, computerId, playerUuid, hostUuid);
 
-        // Notify based on resolution direction and self-play status
+        // Notify based on resolution direction
         if (recipientUuid.equals(sourceUuid)) {
             // Bet returned to player (win/push)
-            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, selfPlay);
-        } else if (selfPlay) {
-            // Self-play: escrow goes to host (= same person). Balance returned to normal.
-            // Show as "Returned" since the money came back to the same person.
-            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, true);
+            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, false);
         } else {
             // Normal play: bet goes to host (player lost) — notify host of credit
             BalanceNotifier.notifyCredit(recipientUuid, hold.amount, reason);
@@ -327,6 +387,24 @@ public class EscrowService {
         }
 
         UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+
+        if (hold.selfPlay) {
+            // Self-play: no real money to refund
+            hold.status = "COMPLETED";
+            writeHold(hold);
+            deleteHold(escrowId);
+
+            String txId = escrowId + "-cancel";
+            UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+            TransactionLedger.logTransfer(txId, sourceUuid, sourceUuid, hold.amount,
+                    "[self-play] escrow cancel: " + reason, computerId, playerUuid, hostUuid);
+            BalanceNotifier.notifySelfPlay(sourceUuid,
+                    "Bet cancelled: " + hold.amount + " tokens | " + reason);
+
+            VHCCTweaks.LOGGER.info("CCVault: Self-play escrow {} cancelled — {} tokens (simulated)", escrowId, hold.amount);
+            return EscrowResult.success(txId);
+        }
+
         if (!DogBridge.add(sourceUuid, hold.amount)) {
             activeEscrows.put(escrowId, hold); // put back — refund failed
             VHCCTweaks.LOGGER.error("CCVault: Escrow {} cancel — refund FAILED. Hold preserved.", escrowId);
@@ -344,8 +422,7 @@ public class EscrowService {
                 "escrow cancel: " + reason, computerId, playerUuid, hostUuid);
 
         // Notify player of refund
-        boolean selfPlay = hostUuid != null && sourceUuid.equals(hostUuid);
-        BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, selfPlay);
+        BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, false);
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} cancelled — {} tokens refunded to {}", escrowId, hold.amount, sourceUuid);
         return EscrowResult.success(txId);
@@ -377,6 +454,26 @@ public class EscrowService {
             if (!activeEscrows.remove(escrowId, hold)) continue;
 
             UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+
+            if (hold.selfPlay) {
+                // Self-play: no real money to refund — just clean up
+                hold.status = "COMPLETED";
+                writeHold(hold);
+                deleteHold(escrowId);
+                UUID playerUuid = UUID.fromString(hold.playerUuid);
+                UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+                TransactionLedger.logTransfer(
+                        escrowId + "-destroy", sourceUuid, sourceUuid, hold.amount,
+                        "[self-play] escrow refund (computer destroyed): " + hold.reason,
+                        hold.computerId, playerUuid, hostUuid);
+                BalanceNotifier.notifySelfPlay(sourceUuid,
+                        "Simulated bet refunded (computer destroyed) | " + hold.reason);
+                refunded++;
+                VHCCTweaks.LOGGER.info("CCVault: Self-play escrow {} cleaned up (computer {} destroyed)",
+                        escrowId, computerId);
+                continue;
+            }
+
             if (DogBridge.add(sourceUuid, hold.amount)) {
                 hold.status = "COMPLETED";
                 writeHold(hold);
@@ -415,6 +512,23 @@ public class EscrowService {
                 if (activeEscrows.remove(escrowId, hold)) {
                     VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens", escrowId, hold.amount);
                     UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+
+                    if (hold.selfPlay) {
+                        // Self-play: no real money to refund — just clean up
+                        hold.status = "COMPLETED";
+                        writeHold(hold);
+                        deleteHold(escrowId);
+                        UUID playerUuid = UUID.fromString(hold.playerUuid);
+                        UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+                        TransactionLedger.logTransfer(
+                                escrowId + "-expired", sourceUuid, sourceUuid, hold.amount,
+                                "[self-play] escrow expired: " + hold.reason, hold.computerId, playerUuid, hostUuid);
+                        BalanceNotifier.notifySelfPlay(sourceUuid,
+                                "Escrow expired (simulated) | " + hold.reason);
+                        VHCCTweaks.LOGGER.info("CCVault: Self-play escrow {} expired — cleaned up", escrowId);
+                        continue;
+                    }
+
                     if (DogBridge.add(sourceUuid, hold.amount)) {
                         // Refund succeeded — mark as COMPLETED before deleting (crash-safe)
                         hold.status = "COMPLETED";
@@ -484,12 +598,13 @@ public class EscrowService {
         public String hostUuid;
         public long expiresAt;
         public String status; // HELD
+        public boolean selfPlay; // true = no real money moved
 
         public EscrowHold() {} // For Gson
 
         public EscrowHold(String escrowId, String sourceUuid, long amount, String reason,
                           int computerId, String playerUuid, String hostUuid,
-                          long expiresAt, String status) {
+                          long expiresAt, String status, boolean selfPlay) {
             this.escrowId = escrowId;
             this.sourceUuid = sourceUuid;
             this.amount = amount;
@@ -499,6 +614,7 @@ public class EscrowService {
             this.hostUuid = hostUuid;
             this.expiresAt = expiresAt;
             this.status = status;
+            this.selfPlay = selfPlay;
         }
     }
 

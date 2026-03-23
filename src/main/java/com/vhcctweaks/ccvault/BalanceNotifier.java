@@ -26,8 +26,9 @@ import java.util.UUID;
  *
  * <p>Self-play (player == host) handling:
  * <ul>
- *   <li>Direct transfers are suppressed (net-zero balance change)</li>
- *   <li>Escrow notifications include a [self-play] tag for clarity</li>
+ *   <li>No real money moves — all operations are simulated</li>
+ *   <li>Chat messages describe what WOULD happen, tagged with [Self-Play]</li>
+ *   <li>Balance is never modified, preventing duplication/loss bugs</li>
  * </ul>
  */
 public class BalanceNotifier {
@@ -164,6 +165,28 @@ public class BalanceNotifier {
                 .append(new TextComponent("Bet settled").withStyle(ChatFormatting.YELLOW))
                 .append(new TextComponent(" | " + reason + " (-" + NUM_FMT.format(amount) + ")").withStyle(ChatFormatting.GRAY))
                 .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
+
+        player.sendMessage(msg, player.getUUID());
+    }
+
+    /**
+     * Self-play simulation notification. No balance was actually changed.
+     * Shows what WOULD have happened if this were a real transaction.
+     *
+     * @param uuid        the player's UUID
+     * @param description human-readable description of the simulated action
+     */
+    public static void notifySelfPlay(UUID uuid, String description) {
+        ServerPlayer player = getPlayer(uuid);
+        if (player == null) return;
+
+        long balance = DogBridge.getBalance(uuid);
+
+        MutableComponent msg = new TextComponent("")
+                .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                .append(new TextComponent("[Self-Play] ").withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD))
+                .append(new TextComponent(description).withStyle(ChatFormatting.YELLOW))
+                .append(new TextComponent(fmtBal(balance)).withStyle(ChatFormatting.DARK_GRAY));
 
         player.sendMessage(msg, player.getUUID());
     }

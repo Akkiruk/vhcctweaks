@@ -8,7 +8,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -59,9 +58,15 @@ public class ComputerPlacementTracker {
 
         int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(be);
         if (computerId >= 0) {
-            computerOwners.put(computerId, player.getUUID());
-            save();
-            VHCCTweaks.LOGGER.debug("CCVault: Computer {} placed by {}", computerId, player.getName().getString());
+            // Only assign if this computer ID has no owner yet — ownership is permanent
+            if (!computerOwners.containsKey(computerId)) {
+                computerOwners.put(computerId, player.getUUID());
+                save();
+                VHCCTweaks.LOGGER.debug("CCVault: Computer {} placed by {}", computerId, player.getName().getString());
+            } else {
+                VHCCTweaks.LOGGER.debug("CCVault: Computer {} already owned, ignoring placement by {}",
+                        computerId, player.getName().getString());
+            }
         } else {
             // Computer ID not assigned yet — store by position so we can resolve on first interaction
             pendingByPosition.put(event.getPos().asLong(), player.getUUID());
@@ -69,31 +74,23 @@ public class ComputerPlacementTracker {
         }
     }
 
-    @SubscribeEvent
-    public static void onBlockBreak(BlockEvent.BreakEvent event) {
-        if (event.getWorld().isClientSide()) return;
-
-        BlockState state = event.getState();
-        ResourceLocation blockId = state.getBlock().getRegistryName();
-        if (blockId == null || !blockId.getNamespace().equals("computercraft")) return;
-
-        Level level = (Level) event.getWorld();
-        BlockEntity be = level.getBlockEntity(event.getPos());
-        if (be == null) return;
-
-        int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(be);
-        if (computerId < 0) return;
-    }
-
     /** Get the UUID of the player who placed the computer, or null if unknown. */
     public static UUID getOwner(int computerId) {
         return computerOwners.get(computerId);
     }
 
-    /** Manually set owner (admin command). */
-    public static void setOwner(int computerId, UUID ownerUuid) {
+    /**
+     * Set owner for a computer ID, only if it has no existing owner.
+     * Ownership is permanent and cannot be overwritten.
+     * @return true if ownership was assigned, false if already owned
+     */
+    public static boolean setOwner(int computerId, UUID ownerUuid) {
+        if (computerOwners.containsKey(computerId)) {
+            return false;
+        }
         computerOwners.put(computerId, ownerUuid);
         save();
+        return true;
     }
 
     /**

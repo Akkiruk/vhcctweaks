@@ -217,7 +217,41 @@ public class VaultConfigPatcher {
         }
         writeServerConfigIfNeeded(defaultConfigs.resolve("computercraft-server.toml"));
 
-        // Per-world configs are managed by CC:Tweaked itself using defaultconfigs as template
+        // 2) Ensure HTTP is enabled in all existing per-world configs
+        Path savesDir = instanceDir.resolve("saves");
+        if (Files.exists(savesDir) && Files.isDirectory(savesDir)) {
+            try (var worlds = Files.newDirectoryStream(savesDir)) {
+                for (Path world : worlds) {
+                    Path serverConfig = world.resolve("serverconfig/computercraft-server.toml");
+                    if (Files.exists(serverConfig)) {
+                        enableHttpInConfig(serverConfig);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void enableHttpInConfig(Path configPath) throws IOException {
+        String content = Files.readString(configPath, StandardCharsets.UTF_8);
+        String updated = content;
+
+        // Enable HTTP API
+        updated = updated.replaceAll(
+                "(?m)(^\\s*#[^\\n]*\\n)*\\s*enabled\\s*=\\s*false",
+                "$0".replaceFirst("enabled\\s*=\\s*false", "enabled = true")
+        );
+
+        // Simpler approach: direct line-based replacements
+        updated = content;
+        updated = updated.replace("\tenabled = false", "\tenabled = true");
+        updated = updated.replace("\twebsocket_enabled = false", "\twebsocket_enabled = true");
+        updated = updated.replace("        enabled = false", "        enabled = true");
+        updated = updated.replace("        websocket_enabled = false", "        websocket_enabled = true");
+
+        if (!updated.equals(content)) {
+            Files.writeString(configPath, updated, StandardCharsets.UTF_8);
+            VHCCTweaks.LOGGER.info("Enabled HTTP in {}", configPath);
+        }
     }
 
     private static void writeServerConfigIfNeeded(Path serverConfigPath) throws IOException {

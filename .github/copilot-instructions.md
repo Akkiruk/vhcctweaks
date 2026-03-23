@@ -54,6 +54,18 @@ Compile-only dependencies (not bundled in the JAR):
 
 The Vault and Curios JARs are only needed for local development (mixin compile targets). CI can build without them since they're `compileOnly`.
 
+## Local Deploy (Required)
+
+After every build, **always** deploy the JAR to the Minecraft instance mods folder:
+
+```
+Copy-Item build\libs\vhcctweaks-*.jar "$env:APPDATA\PrismLauncher\instances\Vault Paradise\minecraft\mods\" -Force
+```
+
+The Minecraft instance is at: `%APPDATA%\PrismLauncher\instances\Vault Paradise\minecraft\`
+
+This ensures the user is always testing with the latest build. Never skip this step after a successful build.
+
 ## Coding Conventions
 
 - Mixins use string `targets` for optional mod classes (AP) so they no-op gracefully if the mod is absent

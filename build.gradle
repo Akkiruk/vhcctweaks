@@ -55,6 +55,49 @@ dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
+tasks.register('checkClientPacketSafety') {
+    group = 'verification'
+    description = 'Fails if vhcctweaks introduces direct client packet sends or custom networking.'
+
+    doLast {
+        def javaFiles = fileTree('src/main/java') {
+            include '**/*.java'
+        }
+
+        def forbiddenPatterns = [
+            [pattern: ~/\bServerGamePacketListenerImpl\b/, message: 'direct server connection access'],
+            [pattern: ~/\bClientbound[A-Za-z0-9_]*\b/, message: 'vanilla clientbound packet class'],
+            [pattern: ~/\bServerbound[A-Za-z0-9_]*\b/, message: 'vanilla serverbound packet class'],
+            [pattern: ~/\bPacketDistributor\b/, message: 'Forge packet distributor'],
+            [pattern: ~/\bSimpleChannel\b/, message: 'Forge custom network channel'],
+            [pattern: ~/\bNetworkRegistry\b/, message: 'Forge network registry'],
+            [pattern: ~/\bCustomPacketPayload\b/, message: 'custom packet payload'],
+            [pattern: ~/\bFriendlyByteBuf\b/, message: 'raw packet buffer usage'],
+            [pattern: ~/\bconnection\s*\.\s*send\s*\(/, message: 'manual connection.send(...) call']
+        ]
+
+        def violations = []
+        javaFiles.each { file ->
+            def lines = file.readLines('UTF-8')
+            lines.eachWithIndex { line, index ->
+                forbiddenPatterns.each { forbidden ->
+                    if ((line =~ forbidden.pattern).find()) {
+                        violations << "${project.relativePath(file)}:${index + 1}: ${forbidden.message}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Illegal client packet usage detected:\n" + violations.join('\n'))
+        }
+    }
+}
+
+tasks.named('check').configure {
+    dependsOn tasks.named('checkClientPacketSafety')
+}
+
 jar {
     manifest {
         attributes([

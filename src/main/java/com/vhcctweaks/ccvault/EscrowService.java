@@ -207,8 +207,9 @@ public class EscrowService {
         activeEscrows.put(escrowId, hold);
         RateLimiter.recordTransfer(computerId, playerUuid);
 
-        // Notify player of escrow hold
-        BalanceNotifier.notifyEscrowHold(sourceUuid, amount, reason);
+        // Notify player of escrow hold (with self-play tag if applicable)
+        boolean selfPlay = hostUuid != null && sourceUuid.equals(hostUuid);
+        BalanceNotifier.notifyEscrowHold(sourceUuid, amount, reason, selfPlay);
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} created — {} tokens held from {} (computer {}, timeout {}s)",
                 escrowId, amount, sourceUuid, computerId, ModConfig.CCVAULT_ESCROW_TIMEOUT_SECONDS.get());
@@ -288,14 +289,23 @@ public class EscrowService {
         String txId = escrowId + "-resolve";
         UUID sourceUuid = UUID.fromString(hold.sourceUuid);
         UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+        boolean selfPlay = hostUuid != null && sourceUuid.equals(hostUuid);
         TransactionLedger.logTransfer(txId, sourceUuid, recipientUuid, hold.amount,
                 "escrow resolve: " + reason, computerId, playerUuid, hostUuid);
 
-        // Notify — if returning to source it's a bet return, otherwise it's a credit to someone else
+        // Notify based on resolution direction and self-play status
         if (recipientUuid.equals(sourceUuid)) {
-            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason + " (bet returned)");
+            // Bet returned to player (win/push)
+            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, selfPlay);
+        } else if (selfPlay) {
+            // Self-play: escrow goes to host (= same person). Balance returned to normal.
+            // Show as "Returned" since the money came back to the same person.
+            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, true);
         } else {
+            // Normal play: bet goes to host (player lost) — notify host of credit
             BalanceNotifier.notifyCredit(recipientUuid, hold.amount, reason);
+            // Also notify the player that their bet was settled (informational closure)
+            BalanceNotifier.notifyBetSettled(sourceUuid, hold.amount, reason);
         }
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} resolved — {} tokens to {}", escrowId, hold.amount, recipientUuid);
@@ -334,7 +344,8 @@ public class EscrowService {
                 "escrow cancel: " + reason, computerId, playerUuid, hostUuid);
 
         // Notify player of refund
-        BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason);
+        boolean selfPlay = hostUuid != null && sourceUuid.equals(hostUuid);
+        BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason, selfPlay);
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} cancelled — {} tokens refunded to {}", escrowId, hold.amount, sourceUuid);
         return EscrowResult.success(txId);

@@ -196,11 +196,14 @@ public class TransferService {
                 playerUuid, hostUuid);
         RateLimiter.recordTransfer(computerId, playerUuid);
 
-        // Step 8: Notify both players via chat
-        BalanceNotifier.notifyDebit(fromUuid, amount, reason);
-        if (!toUuid.equals(fromUuid)) {
+        // Step 8: Notify players via chat
+        // Self-play (player == host): transfers are net-zero, suppress confusing +/- notifications
+        if (!fromUuid.equals(toUuid)) {
+            BalanceNotifier.notifyDebit(fromUuid, amount, reason);
             BalanceNotifier.notifyCredit(toUuid, amount, reason);
         }
+        // Self-play transfers are silent — the escrow hold/refund notifications
+        // already track the meaningful balance changes
 
         return TransferResult.success(txId);
     }

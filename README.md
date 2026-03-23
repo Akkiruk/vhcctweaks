@@ -7,7 +7,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.18.2-green)
 ![Forge](https://img.shields.io/badge/Forge-40.3.11+-orange)
 
-A Forge mod that balances [CC:Tweaked](https://modrinth.com/mod/cc-tweaked) and [Advanced Peripherals](https://modrinth.com/mod/advanced-peripherals) for **Vault Hunters 3rd Edition**. Drop it in your `mods/` folder — all configuration is fully automatic.
+A Forge mod that balances [CC:Tweaked](https://modrinth.com/mod/cc-tweaked) and [Advanced Peripherals](https://modrinth.com/mod/advanced-peripherals) for **Vault Hunters 3rd Edition**. Drop it in your `mods/` folder â€” all configuration is fully automatic.
 
 ## Why This Mod Exists
 
@@ -31,7 +31,7 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 
 ### Turtle Autocrafting Lock
 - `turtle.craft()` is gated behind the **Automatic Genius** research
-- **Primary enforcement**: Mixin on `TurtleCraftCommand.execute()` — blocks the call before any crafting logic runs
+- **Primary enforcement**: Mixin on `TurtleCraftCommand.execute()` â€” blocks the call before any crafting logic runs
 - **Backup enforcement**: `ItemCraftedEvent` handler catches CC's FakePlayer crafting, and a periodic inventory sweep strips the crafting upgrade from turtle items
 - Regular turtle features (mining, building, moving, fuel) are **not** restricted
 - Checks the turtle owner's VH research progress via reflection (supports offline owners)
@@ -46,22 +46,22 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 | Mixin | Target | Purpose |
 |-------|--------|---------|
 | `TurtleCraftCommandMixin` | CC:Tweaked | Blocks `turtle.craft()` without Automatic Genius research |
-| `EnvironmentDetectorMixin` | Advanced Peripherals | Forces `isSlimeChunk()` to always return `false` — prevents world seed reverse-engineering |
+| `EnvironmentDetectorMixin` | Advanced Peripherals | Forces `isSlimeChunk()` to always return `false` â€” prevents world seed reverse-engineering |
 | `ChatBoxEventsMixin` | Advanced Peripherals | Removes the hidden `$` chat channel that suppresses messages from normal chat |
-| `ChatBoxPeripheralMixin` | Advanced Peripherals | Blocks `sendFormattedMessage` / `sendFormattedMessageToPlayer` — prevents JSON-based message spoofing |
+| `ChatBoxPeripheralMixin` | Advanced Peripherals | Blocks `sendFormattedMessage` / `sendFormattedMessageToPlayer` â€” prevents JSON-based message spoofing |
 
 All AP-targeting mixins use string `targets` (not class references) so they gracefully no-op if AP is not installed.
 
 ### Recipe Overrides (via CraftTweaker)
 All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials using CraftTweaker scripts in the `scripts/` folder. A JEI mixin suppresses CC's built-in impostor recipes so JEI only shows the VH versions.
 
-**CC:Tweaked (23 recipes — `scripts/ComputerCraft.zs`)**
+**CC:Tweaked (23 recipes â€” `scripts/ComputerCraft.zs`)**
 | Tier | Material | Items |
 |------|----------|-------|
-| Basic | Chromatic Iron + Larimar | Computer, Monitor, Speaker, Printer, Disk Drive, Wired Modem, Wireless Modem, Cable (6×), Turtle, Pocket Computer, Floppy Disk, Printed Page/Pages/Book, Wired Modem Full conversions |
+| Basic | Chromatic Iron + Larimar | Computer, Monitor, Speaker, Printer, Disk Drive, Wired Modem, Wireless Modem, Cable (6Ã—), Turtle, Pocket Computer, Floppy Disk, Printed Page/Pages/Book, Wired Modem Full conversions |
 | Advanced | Chromatic Steel + Perfect Larimar | Advanced Computer (direct + upgrade), Advanced Monitor, Advanced Wireless Modem, Advanced Turtle (direct + upgrade), Advanced Pocket Computer (direct + upgrade) |
 
-**Advanced Peripherals (20 recipes — `scripts/AdvancedPeripherals.zs`)**
+**Advanced Peripherals (20 recipes â€” `scripts/AdvancedPeripherals.zs`)**
 | Tier | Material | Items |
 |------|----------|-------|
 | Base | Iron + Chromatic Iron | Peripheral Casing |
@@ -121,17 +121,17 @@ vhcc.clientDelete("file.txt")
 A server-authoritative economy API that lets CC:Tweaked computers move **Vault Tokens** (from [Dog's PlayerShops](https://modrinth.com/mod/dogs-playershops)) between players. Designed for in-game shops, casinos, and trading terminals.
 
 **Core concepts:**
-- **`"player"`** — the person currently using the terminal (right-clicked it)
-- **`"host"`** — the person who placed the computer block
-- Every debit has an equal credit — no tokens are created or destroyed
+- **`"player"`** â€” the person currently using the terminal (right-clicked it)
+- **`"host"`** â€” the person who placed the computer block
+- Every debit has an equal credit â€” no tokens are created or destroyed
 - All transfers are permanently logged with TX IDs, amounts, parties, reason, and timestamp
 
 **Key features:**
-- **Click-to-approve authentication** — server sends an unforgeable `[APPROVE]` chat message; scripts cannot fake it
-- **Rate limiting** — per-terminal (10/min) and per-player (20/min) caps prevent abuse
-- **Crash-safe transfers** — Write-Ahead Log ensures incomplete transfers auto-recover on restart
-- **Double-entry ledger** — all transactions are permanently recorded
-- **Player commands** — `/ccvault approve <code>` and `/ccvault revoke <computerId>`
+- **Click-to-approve authentication** â€” server sends an unforgeable `[APPROVE]` chat message; scripts cannot fake it
+- **Rate limiting** â€” per-terminal (10/min) and per-player (20/min) caps prevent abuse
+- **Crash-safe transfers** â€” Write-Ahead Log ensures incomplete transfers auto-recover on restart
+- **Double-entry ledger** â€” all transactions are permanently recorded
+- **Player commands** â€” `/ccvault approve <code>` and `/ccvault revoke <computerId>`
 
 ```lua
 -- Quick example: charge 50 tokens
@@ -145,14 +145,14 @@ Full API reference: [`docs/CCVAULT_API.md`](docs/CCVAULT_API.md)
 
 ## Installation
 
-1. Download `vhcctweaks-2.1.0.jar` from the [Releases](../../releases) page
+1. Download `vhcctweaks-2.2.0.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
 3. Copy `scripts/ComputerCraft.zs` and `scripts/AdvancedPeripherals.zs` from this repo into your instance's `scripts/` folder
-4. Launch the game — all config patching happens automatically on first startup
+4. Launch the game â€” all config patching happens automatically on first startup
 
-> **Note:** The `.zs` scripts require [CraftTweaker](https://modrinth.com/mod/crafttweaker) and [JEITweaker](https://modrinth.com/mod/jeitweaker) (both included in Vault Hunters). The scripts are fully self-contained — each one removes the default recipes and adds VH replacements, so no edits to other files are needed.
+> **Note:** The `.zs` scripts require [CraftTweaker](https://modrinth.com/mod/crafttweaker) and [JEITweaker](https://modrinth.com/mod/jeitweaker) (both included in Vault Hunters). The scripts are fully self-contained â€” each one removes the default recipes and adds VH replacements, so no edits to other files are needed.
 
-**Requirements**: CC:Tweaked must be installed. Advanced Peripherals is optional — AP-related features activate only if AP is present.
+**Requirements**: CC:Tweaked must be installed. Advanced Peripherals is optional â€” AP-related features activate only if AP is present.
 
 ## Configuration
 
@@ -191,45 +191,45 @@ Requires **JDK 17** and **Gradle 7.6+**.
 ./gradlew build
 ```
 
-Output: `build/libs/vhcctweaks-2.1.0.jar`
+Output: `build/libs/vhcctweaks-2.2.0.jar`
 
 ## Project Structure
 
 ```
 src/main/java/com/vhcctweaks/
-├── VHCCTweaks.java                      # Mod entry point
-├── api/VHCCTweaksAPI.java               # Lua filesystem API (sandboxed)
-├── ccvault/
-│   ├── CCVaultAPI.java                  # Lua economy API (ccvault global)
-│   ├── DogBridge.java                   # Dog's PlayerShops integration
-│   ├── RateLimiter.java                 # Per-terminal & per-player rate limits
-│   ├── SessionAuthManager.java          # Click-to-approve auth sessions
-│   ├── TransactionLedger.java           # Double-entry transaction log
-│   └── TransferService.java             # Crash-safe token transfers (WAL)
-├── command/
-│   └── CCVaultCommand.java              # /ccvault approve & revoke commands
-├── config/ModConfig.java                # Forge config spec
-├── handler/
-│   ├── ComputerInteractionTracker.java  # Player↔Computer right-click mapping
-│   ├── ComputerPlacementTracker.java    # Computer↔Owner placement mapping
-│   ├── ComputerReflectionHelper.java    # Shared CC reflection utilities
-│   ├── CraftingLockHandler.java         # Crafty turtle research gate
-│   └── VaultProtectionHandler.java      # Vault dimension block
-├── mixin/
-│   ├── TurtleCraftCommandMixin.java     # turtle.craft() block
-│   ├── RecipeResolverMixin.java         # JEI impostor recipe suppression
-│   ├── ChatBoxEventsMixin.java          # $ channel removal
-│   ├── ChatBoxPeripheralMixin.java      # Formatted message block
-│   └── EnvironmentDetectorMixin.java    # Slime chunk block
-├── network/
-│   ├── ClientFilePacket.java            # Client-side file operations
-│   └── VHCCNetwork.java                # Network channel registration
-└── patcher/
-    └── VaultConfigPatcher.java          # Auto-patches VH + CC + AP configs
+â”œâ”€â”€ VHCCTweaks.java                      # Mod entry point
+â”œâ”€â”€ api/VHCCTweaksAPI.java               # Lua filesystem API (sandboxed)
+â”œâ”€â”€ ccvault/
+â”‚   â”œâ”€â”€ CCVaultAPI.java                  # Lua economy API (ccvault global)
+â”‚   â”œâ”€â”€ DogBridge.java                   # Dog's PlayerShops integration
+â”‚   â”œâ”€â”€ RateLimiter.java                 # Per-terminal & per-player rate limits
+â”‚   â”œâ”€â”€ SessionAuthManager.java          # Click-to-approve auth sessions
+â”‚   â”œâ”€â”€ TransactionLedger.java           # Double-entry transaction log
+â”‚   â””â”€â”€ TransferService.java             # Crash-safe token transfers (WAL)
+â”œâ”€â”€ command/
+â”‚   â””â”€â”€ CCVaultCommand.java              # /ccvault approve & revoke commands
+â”œâ”€â”€ config/ModConfig.java                # Forge config spec
+â”œâ”€â”€ handler/
+â”‚   â”œâ”€â”€ ComputerInteractionTracker.java  # Playerâ†”Computer right-click mapping
+â”‚   â”œâ”€â”€ ComputerPlacementTracker.java    # Computerâ†”Owner placement mapping
+â”‚   â”œâ”€â”€ ComputerReflectionHelper.java    # Shared CC reflection utilities
+â”‚   â”œâ”€â”€ CraftingLockHandler.java         # Crafty turtle research gate
+â”‚   â””â”€â”€ VaultProtectionHandler.java      # Vault dimension block
+â”œâ”€â”€ mixin/
+â”‚   â”œâ”€â”€ TurtleCraftCommandMixin.java     # turtle.craft() block
+â”‚   â”œâ”€â”€ RecipeResolverMixin.java         # JEI impostor recipe suppression
+â”‚   â”œâ”€â”€ ChatBoxEventsMixin.java          # $ channel removal
+â”‚   â”œâ”€â”€ ChatBoxPeripheralMixin.java      # Formatted message block
+â”‚   â””â”€â”€ EnvironmentDetectorMixin.java    # Slime chunk block
+â”œâ”€â”€ network/
+â”‚   â”œâ”€â”€ ClientFilePacket.java            # Client-side file operations
+â”‚   â””â”€â”€ VHCCNetwork.java                # Network channel registration
+â””â”€â”€ patcher/
+    â””â”€â”€ VaultConfigPatcher.java          # Auto-patches VH + CC + AP configs
 
 docs/
-├── CCVAULT_API.md                       # Full CCVault API reference
-└── ccvault_api_reference.lua            # Lua API stub for IDE autocompletion
+â”œâ”€â”€ CCVAULT_API.md                       # Full CCVault API reference
+â””â”€â”€ ccvault_api_reference.lua            # Lua API stub for IDE autocompletion
 ```
 
 ## Compatibility
@@ -244,4 +244,4 @@ docs/
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 Akkiruk
+[MIT](LICENSE) â€” Copyright (c) 2026 Akkiruk

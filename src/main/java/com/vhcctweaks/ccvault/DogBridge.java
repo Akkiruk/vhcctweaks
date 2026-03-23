@@ -18,9 +18,9 @@ public class DogBridge {
     private static volatile boolean available = false;
 
     // Cached reflection handles
-    private static Method getTokens;   // long getTokens(UUID)
-    private static Method addTokens;   // void addTokens(UUID, long)
-    private static Method removeTokens; // void removeTokens(UUID, long)
+    private static Method getBalance;  // long getBalance(UUID)
+    private static Method addTokens;   // boolean addTokens(UUID, long)
+    private static Method removeTokens; // boolean removeTokens(UUID, long)
 
     private DogBridge() {}
 
@@ -29,7 +29,7 @@ public class DogBridge {
         initialized = true;
         try {
             Class<?> api = Class.forName(API_CLASS);
-            getTokens = api.getMethod("getTokens", UUID.class);
+            getBalance = api.getMethod("getBalance", UUID.class);
             addTokens = api.getMethod("addTokens", UUID.class, long.class);
             removeTokens = api.getMethod("removeTokens", UUID.class, long.class);
             available = true;
@@ -51,7 +51,7 @@ public class DogBridge {
     public static long getBalance(UUID uuid) {
         if (!isAvailable()) return -1;
         try {
-            Object result = getTokens.invoke(null, uuid);
+            Object result = getBalance.invoke(null, uuid);
             return ((Number) result).longValue();
         } catch (Exception e) {
             VHCCTweaks.LOGGER.error("CCVault: getTokens failed for {}", uuid, e);

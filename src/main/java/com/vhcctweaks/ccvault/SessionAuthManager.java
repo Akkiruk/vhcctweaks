@@ -39,6 +39,10 @@ public class SessionAuthManager {
     // Active authenticated sessions: sessionKey → true
     private static final Set<SessionKey> activeSessions = ConcurrentHashMap.newKeySet();
 
+    // Current authenticated principal per computer.
+    // Exactly one player may hold an active auth session for a computer at a time.
+    private static final Map<Integer, UUID> computerAuthenticatedPlayer = new ConcurrentHashMap<>();
+
     // Pending nonces: nonce string → PendingAuth
     private static final Map<String, PendingAuth> pendingNonces = new ConcurrentHashMap<>();
 
@@ -52,7 +56,16 @@ public class SessionAuthManager {
      * Check if a player is authenticated for a specific computer this session.
      */
     public static boolean isAuthenticated(UUID playerUuid, int computerId) {
+        UUID boundPlayer = computerAuthenticatedPlayer.get(computerId);
+        if (!Objects.equals(boundPlayer, playerUuid)) return false;
         return activeSessions.contains(new SessionKey(playerUuid, computerId));
+    }
+
+    /**
+     * Get the UUID currently authenticated for a computer, or null if none.
+     */
+    public static UUID getAuthenticatedPlayer(int computerId) {
+        return computerAuthenticatedPlayer.get(computerId);
     }
 
     /**
@@ -105,7 +118,10 @@ public class SessionAuthManager {
         if (!pending.playerUuid().equals(playerUuid)) return false;
         if (pending.expiresAt() < System.currentTimeMillis()) return false;
 
+        // Replace any existing auth principal for this computer.
+        activeSessions.removeIf(key -> key.computerId() == pending.computerId());
         activeSessions.add(new SessionKey(playerUuid, pending.computerId()));
+        computerAuthenticatedPlayer.put(pending.computerId(), playerUuid);
         VHCCTweaks.LOGGER.debug("CCVault: Player {} authenticated for computer {}", playerUuid, pending.computerId());
         return true;
     }
@@ -115,6 +131,10 @@ public class SessionAuthManager {
      */
     public static void revokeSession(UUID playerUuid, int computerId) {
         activeSessions.remove(new SessionKey(playerUuid, computerId));
+        UUID bound = computerAuthenticatedPlayer.get(computerId);
+        if (Objects.equals(bound, playerUuid)) {
+            computerAuthenticatedPlayer.remove(computerId);
+        }
     }
 
     /**
@@ -122,6 +142,7 @@ public class SessionAuthManager {
      */
     public static void clearPlayerSessions(UUID playerUuid) {
         activeSessions.removeIf(key -> key.playerUuid().equals(playerUuid));
+        computerAuthenticatedPlayer.entrySet().removeIf(e -> e.getValue().equals(playerUuid));
         pendingNonces.values().removeIf(p -> p.playerUuid().equals(playerUuid));
     }
 

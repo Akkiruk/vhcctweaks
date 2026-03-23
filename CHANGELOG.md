@@ -2,10 +2,21 @@
 
 All notable changes to VH CC Tweaks are documented here.
 
+## [2.2.2] - 2026-03-23
+
+### Security
+- **CRITICAL**: Enforced a single authenticated CCVault session principal per computer. Approving a new player on a terminal now replaces any previous authenticated player for that computer.
+- **HIGH**: Hardened CCVault auth checks to require that the current interacting player matches the terminal's authenticated principal before any economy operation.
+
+### Changed
+- `SessionAuthManager` now tracks current authenticated player per computer and revokes stale principals safely.
+- `CCVaultAPI.requireAuth()` now fails closed when session principal and interaction player do not match.
+
 ## [2.2.1] - 2026-03-23
 
 ### Changed
-- Removed CCVault escrow runtime and Lua API methods (scrow, esolveEscrow, cancelEscrow, getEscrowInfo).
+- Removed CCVault escrow runtime and Lua API methods (scrow, 
+esolveEscrow, cancelEscrow, getEscrowInfo).
 - Migrated economy flow to transfer-at-end settlement across integrated game scripts and references.
 - Removed escrow-related config keys and server tick/recovery wiring.
 - Updated API documentation to reflect transfer-at-end model.

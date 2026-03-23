@@ -33,6 +33,8 @@ public class ComputerPlacementTracker {
 
     // computerID (String for JSON compat) → placer UUID
     private static final Map<Integer, UUID> computerOwners = new ConcurrentHashMap<>();
+    // BlockPos (encoded as long) → placer UUID — temporary hold for computers whose ID isn't assigned yet at placement
+    private static final Map<Long, UUID> pendingByPosition = new ConcurrentHashMap<>();
     private static Path persistPath;
 
     /** Set the persistence file path. Must be called before any events fire. */
@@ -59,6 +61,10 @@ public class ComputerPlacementTracker {
             computerOwners.put(computerId, player.getUUID());
             save();
             VHCCTweaks.LOGGER.debug("CCVault: Computer {} placed by {}", computerId, player.getName().getString());
+        } else {
+            // Computer ID not assigned yet — store by position so we can resolve on first interaction
+            pendingByPosition.put(event.getPos().asLong(), player.getUUID());
+            VHCCTweaks.LOGGER.debug("CCVault: Stored pending owner at pos {} for {}", event.getPos(), player.getName().getString());
         }
     }
 
@@ -71,6 +77,15 @@ public class ComputerPlacementTracker {
     public static void setOwner(int computerId, UUID ownerUuid) {
         computerOwners.put(computerId, ownerUuid);
         save();
+    }
+
+    /**
+     * Consume and return the placer UUID stored by block position (from placement time),
+     * or null if no pending placement was recorded at that position.
+     * Removes the entry so it's only used once.
+     */
+    public static UUID consumePendingPlacer(long posLong) {
+        return pendingByPosition.remove(posLong);
     }
 
     // ---- persistence ----

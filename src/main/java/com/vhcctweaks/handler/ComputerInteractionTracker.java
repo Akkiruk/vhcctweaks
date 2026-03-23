@@ -64,6 +64,16 @@ public class ComputerInteractionTracker {
                 computerToPlayer.put(computerId, player.getUUID());
                 interactionTimestamps.put(computerId, System.currentTimeMillis());
                 onlinePlayers.put(player.getUUID(), player);
+
+                // First interaction with an unowned computer → assign host
+                if (ComputerPlacementTracker.getOwner(computerId) == null) {
+                    // Prefer the original placer if we stored one by position
+                    UUID placer = ComputerPlacementTracker.consumePendingPlacer(pos.asLong());
+                    UUID hostUuid = (placer != null) ? placer : player.getUUID();
+                    ComputerPlacementTracker.setOwner(computerId, hostUuid);
+                    VHCCTweaks.LOGGER.info("CCVault: Computer {} assigned host {} on first interaction",
+                            computerId, hostUuid);
+                }
             }
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing right-click: {}", e.getMessage());

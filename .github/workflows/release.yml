@@ -40,9 +40,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6.4'
 
       - name: Build with Gradle
-        run: ./gradlew build
+        run: gradle build
 
       - name: Extract version from tag
         id: version

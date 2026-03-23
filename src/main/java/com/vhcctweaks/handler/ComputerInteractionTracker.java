@@ -1,5 +1,6 @@
 package com.vhcctweaks.handler;
 
+import com.vhcctweaks.config.ModConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -8,8 +9,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +22,8 @@ public class ComputerInteractionTracker {
 
     // computer ID → player UUID
     private static final Map<Integer, UUID> computerToPlayer = new ConcurrentHashMap<>();
+    // computer ID → interaction timestamp (epoch millis)
+    private static final Map<Integer, Long> interactionTimestamps = new ConcurrentHashMap<>();
     // player UUID → live ServerPlayer reference (cleaned up on logout)
     private static final Map<UUID, ServerPlayer> onlinePlayers = new ConcurrentHashMap<>();
 
@@ -42,9 +43,10 @@ public class ComputerInteractionTracker {
         BlockEntity be = level.getBlockEntity(pos);
         if (be == null) return;
 
-        int computerId = getComputerIdFromBlockEntity(be);
+        int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(be);
         if (computerId >= 0) {
             computerToPlayer.put(computerId, player.getUUID());
+            interactionTimestamps.put(computerId, System.currentTimeMillis());
             onlinePlayers.put(player.getUUID(), player);
         }
     }
@@ -70,35 +72,20 @@ public class ComputerInteractionTracker {
         return player;
     }
 
-    // ---- reflection helpers ----
-
-    private static int getComputerIdFromBlockEntity(BlockEntity be) {
-        for (String methodName : new String[]{"getComputerID", "getID"}) {
-            try {
-                Method m = findDeclaredMethod(be.getClass(), methodName);
-                if (m != null) {
-                    m.setAccessible(true);
-                    Object result = m.invoke(be);
-                    if (result instanceof Number) {
-                        return ((Number) result).intValue();
-                    }
-                }
-            } catch (Exception ignored) {
-                // Not a CC computer or method inaccessible — skip
-            }
-        }
-        return -1;
+    /**
+     * Get the player only if their interaction is recent (within configured staleness window).
+     * Used by CCVault for financial operations where a stale interaction is a security risk.
+     */
+    public static ServerPlayer getFreshPlayer(int computerId) {
+        Long timestamp = interactionTimestamps.get(computerId);
+        if (timestamp == null) return null;
+        long staleMs = ModConfig.CCVAULT_INTERACTION_STALE_SECONDS.get() * 1000L;
+        if (System.currentTimeMillis() - timestamp > staleMs) return null;
+        return getPlayer(computerId);
     }
 
-    private static Method findDeclaredMethod(Class<?> clazz, String name) {
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            try {
-                return current.getDeclaredMethod(name);
-            } catch (NoSuchMethodException e) {
-                current = current.getSuperclass();
-            }
-        }
-        return null;
+    /** Get the UUID of the player who last interacted, regardless of staleness. */
+    public static UUID getPlayerUuid(int computerId) {
+        return computerToPlayer.get(computerId);
     }
 }

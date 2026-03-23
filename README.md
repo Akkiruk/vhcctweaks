@@ -1,6 +1,13 @@
 # VH CC Tweaks
 
-AForge mod that balances [CC:Tweaked](https://modrinth.com/mod/cc-tweaked) and [Advanced Peripherals](https://modrinth.com/mod/advanced-peripherals) for **Vault Hunters 3rd Edition**. Drop it in your `mods/` folder — all configuration is fully automatic.
+![Build](https://github.com/Akkiruk/vhcctweaks/actions/workflows/build.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/Akkiruk/vhcctweaks?label=release)
+[![Download Latest](https://img.shields.io/github/downloads/Akkiruk/vhcctweaks/latest/total?label=downloads)](https://github.com/Akkiruk/vhcctweaks/releases/latest)
+![License](https://img.shields.io/github/license/Akkiruk/vhcctweaks)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.18.2-green)
+![Forge](https://img.shields.io/badge/Forge-40.3.11+-orange)
+
+A Forge mod that balances [CC:Tweaked](https://modrinth.com/mod/cc-tweaked) and [Advanced Peripherals](https://modrinth.com/mod/advanced-peripherals) for **Vault Hunters 3rd Edition**. Drop it in your `mods/` folder — all configuration is fully automatic.
 
 ## Why This Mod Exists
 
@@ -112,9 +119,35 @@ vhcc.clientDelete("file.txt")
 
 **Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16-level depth limit, allowlist character set. Client packets re-validate independently.
 
+### CCVault Economy API (`ccvault`)
+A server-authoritative economy API that lets CC:Tweaked computers move **Vault Tokens** (from [Dog's PlayerShops](https://modrinth.com/mod/dogs-playershops)) between players. Designed for in-game shops, casinos, and trading terminals.
+
+**Core concepts:**
+- **`"player"`** — the person currently using the terminal (right-clicked it)
+- **`"host"`** — the person who placed the computer block
+- Every debit has an equal credit — no tokens are created or destroyed
+- All transfers are permanently logged with TX IDs, amounts, parties, reason, and timestamp
+
+**Key features:**
+- **Click-to-approve authentication** — server sends an unforgeable `[APPROVE]` chat message; scripts cannot fake it
+- **Rate limiting** — per-terminal (10/min) and per-player (20/min) caps prevent abuse
+- **Crash-safe transfers** — Write-Ahead Log ensures incomplete transfers auto-recover on restart
+- **Double-entry ledger** — all transactions are permanently recorded
+- **Player commands** — `/ccvault approve <code>` and `/ccvault revoke <computerId>`
+
+```lua
+-- Quick example: charge 50 tokens
+if ccvault.isAvailable() and ccvault.isAuthenticated() then
+    local result, err = ccvault.transfer("player", "host", 50, "shop purchase")
+    if result then print("TX: " .. result.txId) end
+end
+```
+
+Full API reference: [`docs/CCVAULT_API.md`](docs/CCVAULT_API.md)
+
 ## Installation
 
-1. Download `vhcctweaks-2.0.0.jar` from the [Releases](../../releases) page
+1. Download `vhcctweaks-2.1.0.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
 3. Copy `scripts/ComputerCraft.zs` and `scripts/AdvancedPeripherals.zs` from this repo into your instance's `scripts/` folder
 4. Launch the game — all config patching happens automatically on first startup
@@ -161,29 +194,45 @@ Requires **JDK 17** and **Gradle 7.6+**.
 ./gradlew build
 ```
 
-Output: `build/libs/vhcctweaks-2.0.0.jar`
+Output: `build/libs/vhcctweaks-2.1.0.jar`
 
 ## Project Structure
 
 ```
 src/main/java/com/vhcctweaks/
-├── VHCCTweaks.java              # Mod entry point
-├── api/VHCCTweaksAPI.java       # Lua filesystem API (sandboxed)
-├── config/ModConfig.java        # Forge config spec
+├── VHCCTweaks.java                      # Mod entry point
+├── api/VHCCTweaksAPI.java               # Lua filesystem API (sandboxed)
+├── ccvault/
+│   ├── CCVaultAPI.java                  # Lua economy API (ccvault global)
+│   ├── DogBridge.java                   # Dog's PlayerShops integration
+│   ├── RateLimiter.java                 # Per-terminal & per-player rate limits
+│   ├── SessionAuthManager.java          # Click-to-approve auth sessions
+│   ├── TransactionLedger.java           # Double-entry transaction log
+│   └── TransferService.java             # Crash-safe token transfers (WAL)
+├── command/
+│   └── CCVaultCommand.java              # /ccvault approve & revoke commands
+├── config/ModConfig.java                # Forge config spec
 ├── handler/
-│   ├── ComputerInteractionTracker.java  # Player↔Computer mapping
+│   ├── ComputerInteractionTracker.java  # Player↔Computer right-click mapping
+│   ├── ComputerPlacementTracker.java    # Computer↔Owner placement mapping
+│   ├── ComputerReflectionHelper.java    # Shared CC reflection utilities
 │   ├── CraftingLockHandler.java         # Crafty turtle research gate
 │   └── VaultProtectionHandler.java      # Vault dimension block
 ├── mixin/
 │   ├── TurtleCraftCommandMixin.java     # turtle.craft() block
+│   ├── RecipeResolverMixin.java         # JEI impostor recipe suppression
 │   ├── ChatBoxEventsMixin.java          # $ channel removal
 │   ├── ChatBoxPeripheralMixin.java      # Formatted message block
 │   └── EnvironmentDetectorMixin.java    # Slime chunk block
 ├── network/
-│   ├── ClientFilePacket.java    # Client-side file operations
-│   └── VHCCNetwork.java        # Network channel registration
+│   ├── ClientFilePacket.java            # Client-side file operations
+│   └── VHCCNetwork.java                # Network channel registration
 └── patcher/
-    └── VaultConfigPatcher.java  # Auto-patches VH + CC + AP configs
+    └── VaultConfigPatcher.java          # Auto-patches VH + CC + AP configs
+
+docs/
+├── CCVAULT_API.md                       # Full CCVault API reference
+└── ccvault_api_reference.lua            # Lua API stub for IDE autocompletion
 ```
 
 ## Compatibility

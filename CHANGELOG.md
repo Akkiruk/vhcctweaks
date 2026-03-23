@@ -2,6 +2,33 @@
 
 All notable changes to VH CC Tweaks are documented here.
 
+## [2.1.0] - 2026-06-14
+
+### Added
+- **CCVault Economy API** (`ccvault` Lua global): Server-authoritative token economy for CC:Tweaked computers
+  - Transfer Vault Tokens between `"player"` (terminal user) and `"host"` (computer owner)
+  - Click-to-approve authentication via unforgeable server chat messages
+  - Per-terminal (10/min) and per-player (20/min) rate limiting
+  - Crash-safe transfers with Write-Ahead Log (auto-recovers on restart)
+  - Double-entry transaction ledger with permanent TX ID logging
+  - Player commands: `/ccvault approve <code>`, `/ccvault revoke <computerId>`
+- **Dog's PlayerShops integration** (`DogBridge`): Bridges ccvault to the existing Vault Hunters token economy
+- **Computer placement tracker**: Maps computers to the player who placed them (for `"host"` identity)
+- **Shared reflection helper** (`ComputerReflectionHelper`): Cached method handles for CC block entity introspection
+- **Full API documentation**: `docs/CCVAULT_API.md` with reference tables, examples, error catalog, and security model
+- **Lua IDE stub**: `docs/ccvault_api_reference.lua` for autocompletion in editors
+
+### Fixed
+- `getServerPlayerByUuid()` stub in `CCVaultAPI` always returned `null` — now resolves via `ServerLifecycleHooks`
+- `requestAuth()` now returns distinct errors for pending vs new auth requests
+- `RateLimiter` TOCTOU race condition: replaced volatile + AtomicInteger with synchronized sliding window
+- Transaction ID generation switched from insecure `Math.random()` to `SecureRandom`
+- Financial operations now use fresh player lookups (30s staleness check) instead of cached references
+
+### Changed
+- Extracted duplicated reflection code from `ComputerInteractionTracker` and `ComputerPlacementTracker` into shared `ComputerReflectionHelper`
+- Version bumped to 2.1.0
+
 ## [2.0.0] - 2026-03-14
 
 ### Added

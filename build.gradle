@@ -42,6 +42,12 @@ dependencies {
     // Advanced Peripherals (compile-only, for Mixin targets)
     compileOnly files("../mods/AdvancedPeripherals-1.18.2-0.7.31r.jar")
 
+    // The Vault (compile-only, for VaultItemDetailProvider gear/item introspection)
+    compileOnly files("../mods/the_vault-1.18.2-3.20.3.6055.jar")
+
+    // Curios API (compile-only, transitive dependency of VH TrinketItem)
+    compileOnly files("../mods/curios-forge-1.18.2-5.0.9.2.jar")
+
     // JEI (compile-only, for RecipeResolver mixin to fix JEI showing default recipes)
     compileOnly files("../mods/jei-1.18.2-9.7.2.1001.jar")
 

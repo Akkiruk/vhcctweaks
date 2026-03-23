@@ -1,3 +1,5 @@
+#modloaded advancedperipherals
+
 /* Advanced Peripherals recipe overrides for Vault Hunters
    All recipes gated behind VH materials to match modpack balance.
    AP is a 2-star research — basic peripherals use chromatic iron + larimar,

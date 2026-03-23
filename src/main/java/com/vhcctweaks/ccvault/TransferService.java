@@ -83,6 +83,9 @@ public class TransferService {
                             intent.txId, intent.amount, intent.toUuid);
                     UUID toUuid = UUID.fromString(intent.toUuid);
                     if (DogBridge.add(toUuid, intent.amount)) {
+                        intent.status = "CREDITED";
+                        writeIntent(intent);
+                        logTransferIfMissing(intent);
                         VHCCTweaks.LOGGER.info("CCVault: WAL recovery — tx {} completed successfully", intent.txId);
                         BalanceNotifier.notifyCredit(toUuid, intent.amount, "recovery: " + intent.reason);
                     } else {
@@ -94,7 +97,8 @@ public class TransferService {
                     break;
 
                 case "CREDITED":
-                    // Credit already happened — just clean up the stale WAL file
+                    // Credit already happened — ensure the ledger has a record, then clean up
+                    logTransferIfMissing(intent);
                     VHCCTweaks.LOGGER.info("CCVault: WAL recovery — tx {} already CREDITED, cleaning up", intent.txId);
                     Files.deleteIfExists(file);
                     break;
@@ -152,7 +156,8 @@ public class TransferService {
 
         // Step 1: Write PENDING intent to WAL
         TransferIntent intent = new TransferIntent(txId, fromUuid.toString(), toUuid.toString(),
-                amount, reason, "PENDING");
+            amount, reason, "PENDING", computerId,
+            playerUuid.toString(), hostUuid != null ? hostUuid.toString() : null);
         if (!writeIntent(intent)) {
             return TransferResult.fail("internal error: could not write transaction intent");
         }
@@ -186,15 +191,18 @@ public class TransferService {
 
         // Step 5: Mark as CREDITED (prevents double-credit if crash before WAL deletion)
         intent.status = "CREDITED";
-        writeIntent(intent);
+        if (!writeIntent(intent)) {
+            VHCCTweaks.LOGGER.error("CCVault: tx {} — could not write CREDITED status. Deleting WAL to avoid duplicate recovery.", txId);
+            deleteIntent(txId);
+        }
 
-        // Step 6: Delete WAL file (transfer complete)
-        deleteIntent(txId);
-
-        // Step 7: Log to ledger and record rate limit
+        // Step 6: Log to ledger and record rate limit
         TransactionLedger.logTransfer(txId, fromUuid, toUuid, amount, reason, computerId,
                 playerUuid, hostUuid);
         RateLimiter.recordTransfer(computerId, playerUuid);
+
+        // Step 7: Delete WAL file (transfer complete)
+        deleteIntent(txId);
 
         // Step 8: Notify players via chat
         // Self-play (player == host): transfers are net-zero, suppress confusing +/- notifications
@@ -253,14 +261,42 @@ public class TransferService {
         long amount;
         String reason;
         String status; // PENDING, DEBITED, CREDITED
+        int computerId;
+        String playerUuid;
+        String hostUuid;
 
-        TransferIntent(String txId, String fromUuid, String toUuid, long amount, String reason, String status) {
+        TransferIntent(String txId, String fromUuid, String toUuid, long amount, String reason,
+                       String status, int computerId, String playerUuid, String hostUuid) {
             this.txId = txId;
             this.fromUuid = fromUuid;
             this.toUuid = toUuid;
             this.amount = amount;
             this.reason = reason;
             this.status = status;
+            this.computerId = computerId;
+            this.playerUuid = playerUuid;
+            this.hostUuid = hostUuid;
+        }
+    }
+
+    private static void logTransferIfMissing(TransferIntent intent) {
+        if (TransactionLedger.hasTransaction(intent.txId)) {
+            return;
+        }
+
+        try {
+            TransactionLedger.logTransfer(
+                    intent.txId,
+                    UUID.fromString(intent.fromUuid),
+                    UUID.fromString(intent.toUuid),
+                    intent.amount,
+                    intent.reason,
+                    intent.computerId,
+                    UUID.fromString(intent.playerUuid),
+                    intent.hostUuid != null ? UUID.fromString(intent.hostUuid) : null
+            );
+        } catch (IllegalArgumentException e) {
+            VHCCTweaks.LOGGER.error("CCVault: Could not reconstruct ledger entry for tx {} during recovery", intent.txId, e);
         }
     }
 

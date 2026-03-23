@@ -65,11 +65,9 @@ public class ComputerInteractionTracker {
                 interactionTimestamps.put(computerId, System.currentTimeMillis());
                 onlinePlayers.put(player.getUUID(), player);
 
-                // First interaction with an unowned computer → assign host
+                // First interaction with an unowned computer assigns permanent owner
                 if (ComputerPlacementTracker.getOwner(computerId) == null) {
-                    // Prefer the original placer if we stored one by position
-                    UUID placer = ComputerPlacementTracker.consumePendingPlacer(pos.asLong());
-                    UUID hostUuid = (placer != null) ? placer : player.getUUID();
+                    UUID hostUuid = player.getUUID();
                     ComputerPlacementTracker.setOwner(computerId, hostUuid);
                     VHCCTweaks.LOGGER.info("CCVault: Computer {} assigned host {} on first interaction",
                             computerId, hostUuid);

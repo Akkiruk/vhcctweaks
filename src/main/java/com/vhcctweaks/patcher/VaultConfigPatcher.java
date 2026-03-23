@@ -217,88 +217,10 @@ public class VaultConfigPatcher {
         }
         writeServerConfigIfNeeded(defaultConfigs.resolve("computercraft-server.toml"));
 
-        // 2) Patch existing world serverconfigs (singleplayer: saves/*/serverconfig/)
-        Path savesDir = instanceDir.resolve("saves");
-        if (Files.exists(savesDir) && Files.isDirectory(savesDir)) {
-            try (var worlds = Files.list(savesDir)) {
-                worlds.filter(Files::isDirectory).forEach(worldDir -> {
-                    patchWorldServerConfig(worldDir);
-                });
-            }
-        }
-
-        // 3) Patch dedicated server world serverconfig (world/serverconfig/)
-        //    The server root is the same as instanceDir (parent of config/)
-        //    Dedicated servers use level-name (default "world") as the world folder
-        Path serverWorldDir = instanceDir.resolve("world");
-        if (Files.exists(serverWorldDir) && Files.isDirectory(serverWorldDir)) {
-            patchWorldServerConfig(serverWorldDir);
-        }
-        // Also check common alternative names
-        for (String altName : new String[]{"World", "server-world"}) {
-            Path altDir = instanceDir.resolve(altName);
-            if (Files.exists(altDir) && Files.isDirectory(altDir)) {
-                patchWorldServerConfig(altDir);
-            }
-        }
-    }
-
-    private static void patchWorldServerConfig(Path worldDir) {
-        Path worldServerConfig = worldDir.resolve("serverconfig/computercraft-server.toml");
-        if (Files.exists(worldServerConfig)) {
-            try {
-                patchExistingServerConfig(worldServerConfig);
-            } catch (IOException e) {
-                VHCCTweaks.LOGGER.warn("Could not patch server config in {}: {}",
-                        worldDir.getFileName(), e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Patches an existing world's computercraft-server.toml to enable HTTP.
-     * Scopes replacements to the [http] section to avoid modifying unrelated settings.
-     */
-    private static void patchExistingServerConfig(Path configPath) throws IOException {
-        String content = Files.readString(configPath, StandardCharsets.UTF_8);
-        if (content.contains("# Patched by VH CC Tweaks")) return; // Already done
-
-        // Scope-aware patching: only modify 'enabled' inside the [http] section
-        // Split by sections, patch only the [http] block
-        StringBuilder patched = new StringBuilder();
-        boolean inHttpSection = false;
-        boolean changed = false;
-        for (String line : content.split("\n", -1)) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("[")) {
-                inHttpSection = trimmed.equals("[http]");
-            }
-            if (inHttpSection) {
-                if (trimmed.matches("enabled\\s*=\\s*false")) {
-                    line = line.replaceFirst("enabled\\s*=\\s*false", "enabled = true");
-                    changed = true;
-                } else if (trimmed.matches("websocket_enabled\\s*=\\s*false")) {
-                    line = line.replaceFirst("websocket_enabled\\s*=\\s*false", "websocket_enabled = true");
-                    changed = true;
-                }
-            }
-            patched.append(line).append("\n");
-        }
-
-        if (changed) {
-            patched.append("# Patched by VH CC Tweaks\n");
-            Files.writeString(configPath, patched.toString(), StandardCharsets.UTF_8);
-            VHCCTweaks.LOGGER.info("Enabled HTTP in existing world config: {}", configPath.getFileName());
-        }
+        // Per-world configs are managed by CC:Tweaked itself using defaultconfigs as template
     }
 
     private static void writeServerConfigIfNeeded(Path serverConfigPath) throws IOException {
-        if (Files.exists(serverConfigPath)) {
-            String existing = Files.readString(serverConfigPath, StandardCharsets.UTF_8);
-            if (existing.contains("VH CC Tweaks")) {
-                return; // Already patched
-            }
-        }
 
         String config = """
                 # CC:Tweaked server config - managed by VH CC Tweaks mod
@@ -437,20 +359,20 @@ public class VaultConfigPatcher {
 
             JsonObject line8 = new JsonObject();
             line8.addProperty("text", "HTTP access");
-            line8.addProperty("color", "gold");
+            line8.addProperty("color", "green");
             desc.add(line8);
 
             JsonObject line9 = new JsonObject();
-            line9.addProperty("text", " has been ");
+            line9.addProperty("text", " is ");
             desc.add(line9);
 
             JsonObject line10 = new JsonObject();
-            line10.addProperty("text", "disabled");
-            line10.addProperty("color", "gold");
+            line10.addProperty("text", "enabled");
+            line10.addProperty("color", "green");
             desc.add(line10);
 
             JsonObject line11 = new JsonObject();
-            line11.addProperty("text", " and CC items cannot be brought into the vaults.");
+            line11.addProperty("text", ". CC items cannot be brought into the vaults.");
             desc.add(line11);
 
             descriptions.add("CC: Tweaked", desc);

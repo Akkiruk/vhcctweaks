@@ -192,20 +192,21 @@ public class EscrowService {
      */
     public static EscrowResult resolve(String escrowId, UUID recipientUuid, String reason,
                                         int computerId, UUID playerUuid) {
-        EscrowHold hold = activeEscrows.get(escrowId);
+        // Atomic claim: remove returns null if another thread already claimed this escrow
+        EscrowHold hold = activeEscrows.remove(escrowId);
         if (hold == null) {
             return EscrowResult.fail("escrow not found or already resolved");
         }
 
         // Security: only the computer that created the escrow can resolve it
         if (hold.computerId != computerId) {
+            activeEscrows.put(escrowId, hold); // put back — wrong computer
             return EscrowResult.fail("escrow belongs to a different computer");
         }
 
         // Check if expired
         if (System.currentTimeMillis() > hold.expiresAt) {
-            // Auto-refund instead of resolving
-            activeEscrows.remove(escrowId);
+            // Auto-refund instead of resolving (escrow already removed from map)
             UUID sourceUuid = UUID.fromString(hold.sourceUuid);
             DogBridge.add(sourceUuid, hold.amount);
             deleteHold(escrowId);
@@ -214,17 +215,18 @@ public class EscrowService {
         }
 
         if (!DogBridge.isAvailable()) {
+            activeEscrows.put(escrowId, hold); // put back — can't process now
             return EscrowResult.fail("economy system not available");
         }
 
         // Credit the recipient
         if (!DogBridge.add(recipientUuid, hold.amount)) {
+            activeEscrows.put(escrowId, hold); // put back — credit failed
             VHCCTweaks.LOGGER.error("CCVault: Escrow {} resolve — credit to {} FAILED. Hold preserved.", escrowId, recipientUuid);
             return EscrowResult.fail("credit failed — escrow preserved, contact admin");
         }
 
-        // Success — clean up
-        activeEscrows.remove(escrowId);
+        // Success — clean up (escrow already removed from map above)
         deleteHold(escrowId);
 
         // Log the resolution to ledger
@@ -245,21 +247,24 @@ public class EscrowService {
      * Cancel an escrow and refund to source. Can only be called by the originating computer.
      */
     public static EscrowResult cancel(String escrowId, String reason, int computerId, UUID playerUuid) {
-        EscrowHold hold = activeEscrows.get(escrowId);
+        // Atomic claim: remove returns null if another thread already claimed this escrow
+        EscrowHold hold = activeEscrows.remove(escrowId);
         if (hold == null) {
             return EscrowResult.fail("escrow not found or already resolved");
         }
         if (hold.computerId != computerId) {
+            activeEscrows.put(escrowId, hold); // put back — wrong computer
             return EscrowResult.fail("escrow belongs to a different computer");
         }
 
         UUID sourceUuid = UUID.fromString(hold.sourceUuid);
         if (!DogBridge.add(sourceUuid, hold.amount)) {
+            activeEscrows.put(escrowId, hold); // put back — refund failed
             VHCCTweaks.LOGGER.error("CCVault: Escrow {} cancel — refund FAILED. Hold preserved.", escrowId);
             return EscrowResult.fail("refund failed — escrow preserved, contact admin");
         }
 
-        activeEscrows.remove(escrowId);
+        // Success — clean up (escrow already removed from map above)
         deleteHold(escrowId);
 
         String txId = escrowId + "-cancel";
@@ -290,20 +295,25 @@ public class EscrowService {
             EscrowHold hold = entry.getValue();
             if (now > hold.expiresAt) {
                 String escrowId = entry.getKey();
-                VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens", escrowId, hold.amount);
-                UUID sourceUuid = UUID.fromString(hold.sourceUuid);
-                if (DogBridge.add(sourceUuid, hold.amount)) {
-                    activeEscrows.remove(escrowId);
-                    deleteHold(escrowId);
-                    UUID playerUuid = UUID.fromString(hold.playerUuid);
-                    UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
-                    TransactionLedger.logTransfer(
-                            escrowId + "-expired", sourceUuid, sourceUuid, hold.amount,
-                            "escrow expired: " + hold.reason, hold.computerId, playerUuid, hostUuid);
-                    BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow expired");
-                    VHCCTweaks.LOGGER.info("CCVault: Escrow {} auto-refund complete", escrowId);
-                } else {
-                    VHCCTweaks.LOGGER.error("CCVault: Escrow {} auto-refund FAILED — will retry next tick", escrowId);
+                // Atomic claim: only process if we successfully remove it
+                // (resolve/cancel on another thread may have already claimed it)
+                if (activeEscrows.remove(escrowId, hold)) {
+                    VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens", escrowId, hold.amount);
+                    UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+                    if (DogBridge.add(sourceUuid, hold.amount)) {
+                        deleteHold(escrowId);
+                        UUID playerUuid = UUID.fromString(hold.playerUuid);
+                        UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+                        TransactionLedger.logTransfer(
+                                escrowId + "-expired", sourceUuid, sourceUuid, hold.amount,
+                                "escrow expired: " + hold.reason, hold.computerId, playerUuid, hostUuid);
+                        BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow expired");
+                        VHCCTweaks.LOGGER.info("CCVault: Escrow {} auto-refund complete", escrowId);
+                    } else {
+                        // Put it back so we can retry next tick
+                        activeEscrows.put(escrowId, hold);
+                        VHCCTweaks.LOGGER.error("CCVault: Escrow {} auto-refund FAILED — will retry next tick", escrowId);
+                    }
                 }
             }
         }

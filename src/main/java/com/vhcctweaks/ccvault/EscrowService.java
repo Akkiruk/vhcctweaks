@@ -348,6 +348,49 @@ public class EscrowService {
     }
 
     /**
+     * Immediately refund all active escrows for a specific computer.
+     * Called when a CC computer block is broken/destroyed so the player
+     * doesn't have to wait for the timeout.
+     *
+     * @param computerId the CC computer ID whose escrows should be refunded
+     * @return number of escrows refunded
+     */
+    public static int refundAllForComputer(int computerId) {
+        int refunded = 0;
+        for (var entry : activeEscrows.entrySet()) {
+            EscrowHold hold = entry.getValue();
+            if (hold.computerId != computerId) continue;
+
+            String escrowId = entry.getKey();
+            // Atomic claim — skip if another thread already claimed it
+            if (!activeEscrows.remove(escrowId, hold)) continue;
+
+            UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+            if (DogBridge.add(sourceUuid, hold.amount)) {
+                hold.status = "COMPLETED";
+                writeHold(hold);
+                deleteHold(escrowId);
+                UUID playerUuid = UUID.fromString(hold.playerUuid);
+                UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
+                TransactionLedger.logTransfer(
+                        escrowId + "-destroy", sourceUuid, sourceUuid, hold.amount,
+                        "escrow refund (computer destroyed): " + hold.reason,
+                        hold.computerId, playerUuid, hostUuid);
+                BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount,
+                        "computer destroyed — bet refunded");
+                refunded++;
+                VHCCTweaks.LOGGER.info("CCVault: Escrow {} refunded (computer {} destroyed) — {} tokens to {}",
+                        escrowId, computerId, hold.amount, sourceUuid);
+            } else {
+                // Put back for timeout retry
+                activeEscrows.put(escrowId, hold);
+                VHCCTweaks.LOGGER.error("CCVault: Escrow {} destroy-refund FAILED — will retry via timeout", escrowId);
+            }
+        }
+        return refunded;
+    }
+
+    /**
      * Called periodically (e.g. every 30s from a server tick handler) to auto-refund expired escrows.
      */
     public static void tickExpired() {

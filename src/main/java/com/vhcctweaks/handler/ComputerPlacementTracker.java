@@ -4,10 +4,12 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.vhcctweaks.VHCCTweaks;
+import com.vhcctweaks.ccvault.EscrowService;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -65,6 +67,28 @@ public class ComputerPlacementTracker {
             // Computer ID not assigned yet — store by position so we can resolve on first interaction
             pendingByPosition.put(event.getPos().asLong(), player.getUUID());
             VHCCTweaks.LOGGER.debug("CCVault: Stored pending owner at pos {} for {}", event.getPos(), player.getName().getString());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onBlockBreak(BlockEvent.BreakEvent event) {
+        if (event.getWorld().isClientSide()) return;
+
+        BlockState state = event.getState();
+        ResourceLocation blockId = state.getBlock().getRegistryName();
+        if (blockId == null || !blockId.getNamespace().equals("computercraft")) return;
+
+        Level level = (Level) event.getWorld();
+        BlockEntity be = level.getBlockEntity(event.getPos());
+        if (be == null) return;
+
+        int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(be);
+        if (computerId < 0) return;
+
+        // Immediately refund any active escrows held by this computer
+        int refunded = EscrowService.refundAllForComputer(computerId);
+        if (refunded > 0) {
+            VHCCTweaks.LOGGER.info("CCVault: Computer {} broken — refunded {} escrow(s)", computerId, refunded);
         }
     }
 

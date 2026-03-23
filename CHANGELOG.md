@@ -2,6 +2,13 @@
 
 All notable changes to VH CC Tweaks are documented here.
 
+## [2.2.3] - 2026-03-23
+
+### Fixed
+- Closed the CCVault WAL to ledger crash window by reconstructing missing ledger entries from CREDITED recovery data and persisting the metadata needed to do it safely.
+- Added participant-specific ledger history files and exact transaction ID matching for faster history lookups and stricter verification.
+- Guarded Advanced Peripherals CraftTweaker recipe overrides so they no-op cleanly when the mod is absent.
+
 ## [2.2.2] - 2026-03-23
 
 ### Security
@@ -24,12 +31,12 @@ esolveEscrow, cancelEscrow, getEscrowInfo).
 ## [2.2.0] - 2026-03-23
 
 ### Security
-- **CRITICAL**: Fixed race condition where escrow hold file was written before debit confirmation — crash between write and debit would create phantom refund (tokens from nothing). Now uses two-phase PENDING->HELD status.
+- **CRITICAL**: Fixed race condition where escrow hold file was written before debit confirmation - crash between write and debit would create phantom refund (tokens from nothing). Now uses two-phase PENDING->HELD status.
 - **CRITICAL**: Fixed 
-esolve() expired-path ignoring DogBridge.add() return value — failed refund would destroy tokens silently. Now preserves escrow for retry on failure.
-- **CRITICAL**: Fixed WAL DEBITED status write being best-effort — disk failure after debit but before status update would cause recovery to discard the intent, destroying tokens. Now reverses debit immediately on write failure.
-- **CRITICAL**: Fixed crash window between successful credit and WAL deletion — recovery would re-credit, creating tokens from nothing. Added CREDITED status to make WAL recovery idempotent.
-- **CRITICAL**: All escrow resolve/cancel/tick paths now write COMPLETED status before deleting hold file — prevents double-payout/double-refund if crash occurs between credit and file deletion.
+esolve() expired-path ignoring DogBridge.add() return value - failed refund would destroy tokens silently. Now preserves escrow for retry on failure.
+- **CRITICAL**: Fixed WAL DEBITED status write being best-effort - disk failure after debit but before status update would cause recovery to discard the intent, destroying tokens. Now reverses debit immediately on write failure.
+- **CRITICAL**: Fixed crash window between successful credit and WAL deletion - recovery would re-credit, creating tokens from nothing. Added CREDITED status to make WAL recovery idempotent.
+- **CRITICAL**: All escrow resolve/cancel/tick paths now write COMPLETED status before deleting hold file - prevents double-payout/double-refund if crash occurs between credit and file deletion.
 - **HIGH**: Fixed player-swap exploit where escrow recipient identity could change between creation and resolution. Recipient is now verified against original source/host UUIDs stored in the escrow.
 - **MEDIUM**: DogBridge.add()/remove() now check boolean return values from Dog's VaultTokenAPI instead of ignoring them.
 
@@ -55,7 +62,7 @@ esolve() expired-path ignoring DogBridge.add() return value — failed refund wo
 - **Lua IDE stub**: `docs/ccvault_api_reference.lua` for autocompletion in editors
 
 ### Fixed
-- `getServerPlayerByUuid()` stub in `CCVaultAPI` always returned `null` â€” now resolves via `ServerLifecycleHooks`
+- `getServerPlayerByUuid()` stub in `CCVaultAPI` always returned `null` - now resolves via `ServerLifecycleHooks`
 - `requestAuth()` now returns distinct errors for pending vs new auth requests
 - `RateLimiter` TOCTOU race condition: replaced volatile + AtomicInteger with synchronized sliding window
 - Transaction ID generation switched from insecure `Math.random()` to `SecureRandom`
@@ -74,9 +81,9 @@ esolve() expired-path ignoring DogBridge.add() return value — failed refund wo
   - AP config patching (disables chunk loading, geo scanning, block reading, inventory management, end automata, husbandry automata)
   - Increased overpowered automata break chance to 5%
 - **CraftTweaker recipe scripts** (`scripts/` folder): Self-contained `.zs` files replace all default recipes
-  - `ComputerCraft.zs` â€” 23 recipes covering every craftable CC:Tweaked item
-  - `AdvancedPeripherals.zs` â€” 20 recipes covering every craftable AP item
-  - Each script removes default recipes + adds VH versions â€” just copy to `scripts/`
+  - `ComputerCraft.zs` - 23 recipes covering every craftable CC:Tweaked item
+  - `AdvancedPeripherals.zs` - 20 recipes covering every craftable AP item
+  - Each script removes default recipes + adds VH versions - just copy to `scripts/`
 - **RecipeResolverMixin**: Suppresses CC:Tweaked's JEI impostor recipe plugin so JEI only shows VH recipes
 - **Security mixins for Advanced Peripherals**
   - `EnvironmentDetectorMixin`: Blocks `isSlimeChunk()` to prevent world seed reverse-engineering
@@ -91,7 +98,7 @@ esolve() expired-path ignoring DogBridge.add() return value — failed refund wo
 ### Fixed
 - **CRITICAL**: `ChatBoxEventsMixin` used `Object` parameter types instead of `ServerChatEvent`/`CommandEvent`, causing a hard crash (`InvalidInjectionException`) that prevented the game from launching when Advanced Peripherals was installed
 - `ChatBoxEventsMixin` `onCommand` handler now only targets `/say $...` commands instead of any command containing `$`
-- Removed unnecessary reflection in `ChatBoxEventsMixin` â€” now uses direct Forge event type methods
+- Removed unnecessary reflection in `ChatBoxEventsMixin` - now uses direct Forge event type methods
 - `vhcc.getBasePath()` no longer exposes the full server filesystem path (returns folder name only)
 
 ### Changed

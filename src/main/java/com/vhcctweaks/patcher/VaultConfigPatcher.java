@@ -256,7 +256,7 @@ public class VaultConfigPatcher {
     }
 
     /**
-     * Patches an existing world's computercraft-server.toml to disable HTTP.
+     * Patches an existing world's computercraft-server.toml to enable HTTP.
      * Scopes replacements to the [http] section to avoid modifying unrelated settings.
      */
     private static void patchExistingServerConfig(Path configPath) throws IOException {
@@ -274,11 +274,11 @@ public class VaultConfigPatcher {
                 inHttpSection = trimmed.equals("[http]");
             }
             if (inHttpSection) {
-                if (trimmed.matches("enabled\\s*=\\s*true")) {
-                    line = line.replaceFirst("enabled\\s*=\\s*true", "enabled = false");
+                if (trimmed.matches("enabled\\s*=\\s*false")) {
+                    line = line.replaceFirst("enabled\\s*=\\s*false", "enabled = true");
                     changed = true;
-                } else if (trimmed.matches("websocket_enabled\\s*=\\s*true")) {
-                    line = line.replaceFirst("websocket_enabled\\s*=\\s*true", "websocket_enabled = false");
+                } else if (trimmed.matches("websocket_enabled\\s*=\\s*false")) {
+                    line = line.replaceFirst("websocket_enabled\\s*=\\s*false", "websocket_enabled = true");
                     changed = true;
                 }
             }
@@ -288,7 +288,7 @@ public class VaultConfigPatcher {
         if (changed) {
             patched.append("# Patched by VH CC Tweaks\n");
             Files.writeString(configPath, patched.toString(), StandardCharsets.UTF_8);
-            VHCCTweaks.LOGGER.info("Disabled HTTP in existing world config: {}", configPath.getFileName());
+            VHCCTweaks.LOGGER.info("Enabled HTTP in existing world config: {}", configPath.getFileName());
         }
     }
 
@@ -317,11 +317,10 @@ public class VaultConfigPatcher {
                 \tmax_main_computer_time = 5
                 
                 [http]
-                \t#Disabled: prevents downloading automation scripts from the internet
-                \tenabled = false
-                \twebsocket_enabled = false
-                \tmax_requests = 0
-                \tmax_websockets = 0
+                \tenabled = true
+                \twebsocket_enabled = true
+                \tmax_requests = 16
+                \tmax_websockets = 4
                 
                 [peripheral]
                 \tcommand_computers = false

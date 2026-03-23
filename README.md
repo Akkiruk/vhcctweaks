@@ -13,7 +13,6 @@ A Forge mod that balances [CC:Tweaked](https://modrinth.com/mod/cc-tweaked) and 
 
 CC:Tweaked and Advanced Peripherals are powerful automation mods, but their default capabilities break Vault Hunters' progression in several ways:
 
-- Players can download exploit scripts from the internet via HTTP
 - Turtles can autocraft without any research investment
 - Environment Detectors can reverse-engineer the world seed via slime chunk mapping
 - ChatBox peripherals can spoof server messages and create hidden communication channels
@@ -72,8 +71,8 @@ All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials us
 | Bridges | Chromatic Steel + Mod Components | ME Bridge (AE2), RS Bridge (Refined Storage) |
 | Automata | Chromatic Steel + Vault Diamond | Weak Automata Core, Overpowered Weak/End/Husbandry Automata Cores |
 
-### HTTP & Network Lockdown
-- HTTP API and WebSockets **disabled** in both `defaultconfigs/` and all existing world `serverconfig/` directories
+### Network Configuration
+- HTTP API and WebSockets **enabled** by default
 - Command computers **disabled**
 - Wireless modem range **reduced** (32/64 blocks normal, 16/32 in storms)
 - Patches applied idempotently with marker comments to prevent re-patching
@@ -172,7 +171,7 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with 12 test groups:
 
 0. Environment detection
-1. HTTP API disabled
+1. HTTP API enabled
 2. Turtle craft research gate
 3. Vault dimension protection
 4. isSlimeChunk blocked

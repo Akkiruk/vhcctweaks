@@ -21,6 +21,10 @@ crash-reports/
 .DS_Store
 Thumbs.db
 
+# Compile-only deps downloaded in CI (not tracked in git)
+libs/AdvancedPeripherals-*.jar
+libs/jei-*.jar
+
 # Misc
 *.class
 ap-source/

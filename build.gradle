@@ -39,17 +39,17 @@ dependencies {
     // CC:Tweaked API (compile-only, it's already in the modpack at runtime)
     compileOnly "org.squiddev:cc-tweaked-${minecraft_version}:${cc_version}"
 
-    // Advanced Peripherals (compile-only, for Mixin targets)
-    compileOnly files("../mods/AdvancedPeripherals-1.18.2-0.7.31r.jar")
+    // Advanced Peripherals (compile-only, for Mixin targets — downloaded in CI from Modrinth)
+    compileOnly files("libs/AdvancedPeripherals-1.18.2-0.7.31r.jar")
 
-    // The Vault (compile-only, for VaultItemDetailProvider gear/item introspection)
-    compileOnly files("../mods/the_vault-1.18.2-3.20.3.6055.jar")
+    // The Vault (compile-only, for VaultItemDetailProvider gear/item introspection — Git LFS)
+    compileOnly files("libs/the_vault-1.18.2-3.20.3.6055.jar")
 
-    // Curios API (compile-only, transitive dependency of VH TrinketItem)
-    compileOnly files("../mods/curios-forge-1.18.2-5.0.9.2.jar")
+    // Curios API (compile-only, transitive dependency of VH TrinketItem — Git LFS)
+    compileOnly files("libs/curios-forge-1.18.2-5.0.9.2.jar")
 
-    // JEI (compile-only, for RecipeResolver mixin to fix JEI showing default recipes)
-    compileOnly files("../mods/jei-1.18.2-9.7.2.1001.jar")
+    // JEI (compile-only, for RecipeResolver mixin — downloaded in CI from Modrinth)
+    compileOnly files("libs/jei-1.18.2-9.7.2.1001.jar")
 
     // Mixin annotation processor for refmap generation
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'

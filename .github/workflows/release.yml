@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -24,17 +26,17 @@ jobs:
 
       - name: Download compile-only dependencies
         run: |
-          mkdir -p ../mods
+          # AP and JEI are downloaded from Modrinth; Vault and Curios are in libs/ via Git LFS
 
           # Advanced Peripherals 0.7.31r (compile-only for mixin targets)
           AP_URL=$(curl -sL "https://api.modrinth.com/v2/project/advanced-peripherals/version?loaders=%5B%22forge%22%5D&game_versions=%5B%221.18.2%22%5D" \
             | jq -r '[.[] | select(.version_number == "0.7.31r")][0].files[0].url')
-          curl -sL "$AP_URL" -o "../mods/AdvancedPeripherals-1.18.2-0.7.31r.jar"
+          curl -sL "$AP_URL" -o "libs/AdvancedPeripherals-1.18.2-0.7.31r.jar"
 
           # JEI 9.7.2.1001 (compile-only for RecipeResolver mixin)
           JEI_URL=$(curl -sL "https://api.modrinth.com/v2/project/jei/version?loaders=%5B%22forge%22%5D&game_versions=%5B%221.18.2%22%5D" \
             | jq -r '[.[] | select(.version_number | contains("9.7.2.1001"))][0].files[] | select(.filename | contains("1.18.2")) | .url' | head -1)
-          curl -sL "$JEI_URL" -o "../mods/jei-1.18.2-9.7.2.1001.jar"
+          curl -sL "$JEI_URL" -o "libs/jei-1.18.2-9.7.2.1001.jar"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4

@@ -2,16 +2,18 @@ package com.vhcctweaks.handler;
 
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Shared reflection utilities for extracting computerIDs from CC:Tweaked block entities.
  * Caches Method handles by class to avoid repeated class hierarchy scans.
+ * Uses Optional because ConcurrentHashMap does not permit null values.
  */
 public class ComputerReflectionHelper {
 
-    // Class → resolved method (null value = already scanned, no method found)
-    private static final Map<Class<?>, Method> methodCache = new ConcurrentHashMap<>();
+    // Class → resolved method (empty Optional = already scanned, no method found)
+    private static final Map<Class<?>, Optional<Method>> methodCache = new ConcurrentHashMap<>();
     private static final String[] METHOD_NAMES = {"getComputerID", "getID"};
 
     /**
@@ -22,15 +24,10 @@ public class ComputerReflectionHelper {
         if (blockEntity == null) return -1;
 
         Class<?> clazz = blockEntity.getClass();
-        Method cached = methodCache.get(clazz);
+        Optional<Method> cached = methodCache.get(clazz);
 
         if (cached != null) {
-            return invokeMethod(cached, blockEntity);
-        }
-
-        // Check if we already scanned this class and found nothing
-        if (methodCache.containsKey(clazz)) {
-            return -1;
+            return cached.map(m -> invokeMethod(m, blockEntity)).orElse(-1);
         }
 
         // Scan for a suitable method
@@ -38,13 +35,13 @@ public class ComputerReflectionHelper {
             Method m = findDeclaredMethod(clazz, methodName);
             if (m != null) {
                 m.setAccessible(true);
-                methodCache.put(clazz, m);
+                methodCache.put(clazz, Optional.of(m));
                 return invokeMethod(m, blockEntity);
             }
         }
 
         // Mark as scanned with no result
-        methodCache.put(clazz, null);
+        methodCache.put(clazz, Optional.empty());
         return -1;
     }
 

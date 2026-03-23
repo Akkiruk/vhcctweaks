@@ -83,6 +83,7 @@ public class TransferService {
                     UUID toUuid = UUID.fromString(intent.toUuid);
                     if (DogBridge.add(toUuid, intent.amount)) {
                         VHCCTweaks.LOGGER.info("CCVault: WAL recovery — tx {} completed successfully", intent.txId);
+                        BalanceNotifier.notifyCredit(toUuid, intent.amount, "recovery: " + intent.reason);
                     } else {
                         // Dog API not yet available (server still starting?) — leave file for next restart
                         VHCCTweaks.LOGGER.error("CCVault: WAL recovery — FAILED to credit tx {}! File kept for retry.", intent.txId);
@@ -179,6 +180,12 @@ public class TransferService {
         TransactionLedger.logTransfer(txId, fromUuid, toUuid, amount, reason, computerId,
                 playerUuid, hostUuid);
         RateLimiter.recordTransfer(computerId, playerUuid);
+
+        // Step 7: Notify both players via chat
+        BalanceNotifier.notifyDebit(fromUuid, amount, reason);
+        if (!toUuid.equals(fromUuid)) {
+            BalanceNotifier.notifyCredit(toUuid, amount, reason);
+        }
 
         return TransferResult.success(txId);
     }

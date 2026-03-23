@@ -81,6 +81,7 @@ public class EscrowService {
                             hold.amount, "escrow auto-refund: " + hold.reason,
                             hold.computerId, UUID.fromString(hold.playerUuid),
                             hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null);
+                    BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow auto-refund (recovery)");
                     VHCCTweaks.LOGGER.info("CCVault: Escrow {} auto-refunded successfully", hold.escrowId);
                     Files.deleteIfExists(file);
                 } else {
@@ -170,6 +171,9 @@ public class EscrowService {
         activeEscrows.put(escrowId, hold);
         RateLimiter.recordTransfer(computerId, playerUuid);
 
+        // Notify player of escrow hold
+        BalanceNotifier.notifyEscrowHold(sourceUuid, amount, reason);
+
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} created — {} tokens held from {} (computer {}, timeout {}s)",
                 escrowId, amount, sourceUuid, computerId, ModConfig.CCVAULT_ESCROW_TIMEOUT_SECONDS.get());
 
@@ -205,6 +209,7 @@ public class EscrowService {
             UUID sourceUuid = UUID.fromString(hold.sourceUuid);
             DogBridge.add(sourceUuid, hold.amount);
             deleteHold(escrowId);
+            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow expired");
             return EscrowResult.fail("escrow expired — tokens auto-refunded to source");
         }
 
@@ -228,6 +233,9 @@ public class EscrowService {
         UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;
         TransactionLedger.logTransfer(txId, sourceUuid, recipientUuid, hold.amount,
                 "escrow resolve: " + reason, computerId, playerUuid, hostUuid);
+
+        // Notify the recipient
+        BalanceNotifier.notifyCredit(recipientUuid, hold.amount, reason);
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} resolved — {} tokens to {}", escrowId, hold.amount, recipientUuid);
         return EscrowResult.success(txId);
@@ -259,6 +267,9 @@ public class EscrowService {
         TransactionLedger.logTransfer(txId, sourceUuid, sourceUuid, hold.amount,
                 "escrow cancel: " + reason, computerId, playerUuid, hostUuid);
 
+        // Notify player of refund
+        BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason);
+
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} cancelled — {} tokens refunded to {}", escrowId, hold.amount, sourceUuid);
         return EscrowResult.success(txId);
     }
@@ -289,6 +300,7 @@ public class EscrowService {
                     TransactionLedger.logTransfer(
                             escrowId + "-expired", sourceUuid, sourceUuid, hold.amount,
                             "escrow expired: " + hold.reason, hold.computerId, playerUuid, hostUuid);
+                    BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow expired");
                     VHCCTweaks.LOGGER.info("CCVault: Escrow {} auto-refund complete", escrowId);
                 } else {
                     VHCCTweaks.LOGGER.error("CCVault: Escrow {} auto-refund FAILED — will retry next tick", escrowId);

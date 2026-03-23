@@ -6,7 +6,8 @@ All notable changes to VH CC Tweaks are documented here.
 
 ### Security
 - **CRITICAL**: Fixed race condition where escrow hold file was written before debit confirmation — crash between write and debit would create phantom refund (tokens from nothing). Now uses two-phase PENDING->HELD status.
-- **CRITICAL**: Fixed esolve() expired-path ignoring DogBridge.add() return value — failed refund would destroy tokens silently. Now preserves escrow for retry on failure.
+- **CRITICAL**: Fixed 
+esolve() expired-path ignoring DogBridge.add() return value — failed refund would destroy tokens silently. Now preserves escrow for retry on failure.
 - **CRITICAL**: Fixed WAL DEBITED status write being best-effort — disk failure after debit but before status update would cause recovery to discard the intent, destroying tokens. Now reverses debit immediately on write failure.
 - **CRITICAL**: Fixed crash window between successful credit and WAL deletion — recovery would re-credit, creating tokens from nothing. Added CREDITED status to make WAL recovery idempotent.
 - **CRITICAL**: All escrow resolve/cancel/tick paths now write COMPLETED status before deleting hold file — prevents double-payout/double-refund if crash occurs between credit and file deletion.
@@ -64,9 +65,7 @@ All notable changes to VH CC Tweaks are documented here.
   - `ChatBoxPeripheralMixin`: Blocks `sendFormattedMessage` / `sendFormattedMessageToPlayer` to prevent message spoofing
 - **Custom Lua API** (`vhcc`): Sandboxed filesystem API exposed to all CC computers
   - Server-side: read, write, append, list, delete, move, copy, exists, isDir, getSize, makeDir
-  - Client-side: clientWrite, clientAppend, clientMakeDir, clientDelete (via network packets to player's local disk)
   - Strict path validation, 1 MB write limit, 16-level depth limit
-- **Network system** for client-side file operations (`VHCCNetwork`, `ClientFilePacket`)
 - **Computer interaction tracker**: Maps computers to the last player who right-clicked them
 - **Comprehensive Lua test suite** (`vhcctweaks_test.lua`) with 12 test groups
 

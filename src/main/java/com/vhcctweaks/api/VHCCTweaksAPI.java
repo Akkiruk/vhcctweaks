@@ -1,14 +1,9 @@
 package com.vhcctweaks.api;
 
 import com.vhcctweaks.VHCCTweaks;
-import com.vhcctweaks.handler.ComputerInteractionTracker;
-import com.vhcctweaks.network.ClientFilePacket;
-import com.vhcctweaks.network.VHCCNetwork;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
-import net.minecraft.server.level.ServerPlayer;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -369,69 +364,5 @@ public class VHCCTweaksAPI implements ILuaAPI {
         } catch (IOException e) {
             throw new LuaException("vhcc: copy failed - " + e.getMessage());
         }
-    }
-
-    // ===== Client-side file operations =====
-    // These send a network packet to the last player who interacted with
-    // this computer. The file is written on the CLIENT's local disk.
-    // Returns {true} on success or {false, "error message"} on failure.
-
-    /**
-     * Write/overwrite a file on the client's local disk.
-     * Lua: local ok, err = vhcc.clientWrite("logs/data.txt", "content")
-     */
-    @LuaFunction
-    public final Object[] clientWrite(String path, String content) throws LuaException {
-        return sendToClient(ClientFilePacket.OP_WRITE, path, content);
-    }
-
-    /**
-     * Append to a file on the client's local disk.
-     * Lua: local ok, err = vhcc.clientAppend("logs/data.txt", "new line\n")
-     */
-    @LuaFunction
-    public final Object[] clientAppend(String path, String content) throws LuaException {
-        return sendToClient(ClientFilePacket.OP_APPEND, path, content);
-    }
-
-    /**
-     * Create a directory on the client's local disk.
-     * Lua: local ok, err = vhcc.clientMakeDir("logs/subdir")
-     */
-    @LuaFunction
-    public final Object[] clientMakeDir(String path) throws LuaException {
-        return sendToClient(ClientFilePacket.OP_MAKE_DIR, path, null);
-    }
-
-    /**
-     * Delete a file on the client's local disk.
-     * Lua: local ok, err = vhcc.clientDelete("logs/old.txt")
-     */
-    @LuaFunction
-    public final Object[] clientDelete(String path) throws LuaException {
-        return sendToClient(ClientFilePacket.OP_DELETE, path, null);
-    }
-
-    private Object[] sendToClient(byte op, String path, String content) {
-        // Validate content size
-        if (content != null && content.length() > MAX_WRITE_SIZE) {
-            return new Object[]{false, "content too large (max " + (MAX_WRITE_SIZE / 1024) + " KB)"};
-        }
-        // Validate path early so the Lua caller gets immediate feedback
-        try {
-            validatePath(path);
-        } catch (Exception e) {
-            return new Object[]{false, e.getMessage()};
-        }
-        // Look up the last player who interacted with this computer
-        ServerPlayer player = ComputerInteractionTracker.getPlayer(computerId);
-        if (player == null) {
-            return new Object[]{false, "no player has interacted with this computer"};
-        }
-        if (player.hasDisconnected()) {
-            return new Object[]{false, "player is no longer connected"};
-        }
-        VHCCNetwork.sendToClient(player, new ClientFilePacket(op, path, content));
-        return new Object[]{true};
     }
 }

@@ -107,15 +107,7 @@ vhcc.exists("path"), vhcc.isDir("path"), vhcc.getSize("path")
 vhcc.isAvailable(), vhcc.getBasePath()
 ```
 
-**Client-side operations** (writes to the player's local `vhcc_data/` via network packets):
-```lua
-vhcc.clientWrite("file.txt", "content")
-vhcc.clientAppend("file.txt", "line\n")
-vhcc.clientMakeDir("subdir")
-vhcc.clientDelete("file.txt")
-```
-
-**Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16-level depth limit, allowlist character set. Client packets re-validate independently.
+**Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16-level depth limit, allowlist character set.
 
 ### CCVault Economy API (`ccvault`)
 A server-authoritative economy API that lets CC:Tweaked computers move **Vault Tokens** (from [Dog's PlayerShops](https://modrinth.com/mod/dogs-playershops)) between players. Designed for in-game shops, casinos, and trading terminals.
@@ -179,8 +171,6 @@ A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with 11 test 
 7. Recipe overrides (manual JEI check)
 8. VH research entries
 9. Allowed features verification
-10. Client-side file writing
-
 Run it on a CC computer or turtle in-game. Results are saved to both the CC filesystem and the real filesystem via the `vhcc` API.
 
 ## Building from Source
@@ -221,9 +211,6 @@ src/main/java/com/vhcctweaks/
 â”‚   â”œâ”€â”€ ChatBoxEventsMixin.java          # $ channel removal
 â”‚   â”œâ”€â”€ ChatBoxPeripheralMixin.java      # Formatted message block
 â”‚   â””â”€â”€ EnvironmentDetectorMixin.java    # Slime chunk block
-â”œâ”€â”€ network/
-â”‚   â”œâ”€â”€ ClientFilePacket.java            # Client-side file operations
-â”‚   â””â”€â”€ VHCCNetwork.java                # Network channel registration
 â””â”€â”€ patcher/
     â””â”€â”€ VaultConfigPatcher.java          # Auto-patches VH + CC + AP configs
 

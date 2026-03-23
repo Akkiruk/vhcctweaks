@@ -12,7 +12,6 @@ import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
 import com.vhcctweaks.handler.CraftingLockHandler;
 import com.vhcctweaks.handler.VaultProtectionHandler;
-import com.vhcctweaks.network.VHCCNetwork;
 import com.vhcctweaks.patcher.VaultConfigPatcher;
 import com.vhcctweaks.detail.VaultItemDetailProvider;
 import dan200.computercraft.api.ComputerCraftAPI;
@@ -39,9 +38,6 @@ public class VHCCTweaks {
     public VHCCTweaks() {
         ModLoadingContext.get().registerConfig(Type.SERVER, ModConfig.SERVER_SPEC);
 
-        // Network channel for client-bound file operations
-        VHCCNetwork.register();
-
         // Vault dimension protection (blocks all CC blocks/items in vaults)
         MinecraftForge.EVENT_BUS.register(VaultProtectionHandler.class);
         // Crafty turtle lock (strips crafting upgrade until research is unlocked)
@@ -63,7 +59,6 @@ public class VHCCTweaks {
 
         // Register custom Lua API for CC:Tweaked computers
         // Server-side: vhcc.write/read/etc. sandboxed to <instance>/vhcc_data/
-        // Client-side: vhcc.clientWrite/clientAppend send data to the player's local disk
         VHCCTweaksAPI.setRootDir(dataDir);
         ComputerCraftAPI.registerAPIFactory(computer -> new VHCCTweaksAPI(computer.getID()));
 

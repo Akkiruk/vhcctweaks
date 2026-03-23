@@ -67,8 +67,11 @@ public class DogBridge {
         if (!isAvailable()) return false;
         if (amount <= 0) return false;
         try {
-            addTokens.invoke(null, uuid, amount);
-            return true;
+            Object result = addTokens.invoke(null, uuid, amount);
+            if (result instanceof Boolean) {
+                return (Boolean) result;
+            }
+            return true; // void return — assume success if no exception
         } catch (Exception e) {
             VHCCTweaks.LOGGER.error("CCVault: addTokens({}, {}) failed", uuid, amount, e);
             return false;
@@ -83,8 +86,11 @@ public class DogBridge {
         if (!isAvailable()) return false;
         if (amount <= 0) return false;
         try {
-            removeTokens.invoke(null, uuid, amount);
-            return true;
+            Object result = removeTokens.invoke(null, uuid, amount);
+            if (result instanceof Boolean) {
+                return (Boolean) result;
+            }
+            return true; // void return — assume success if no exception
         } catch (Exception e) {
             VHCCTweaks.LOGGER.error("CCVault: removeTokens({}, {}) failed", uuid, amount, e);
             return false;

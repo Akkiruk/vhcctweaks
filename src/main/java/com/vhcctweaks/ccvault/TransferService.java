@@ -28,6 +28,7 @@ import java.util.UUID;
  * On server start, recover() scans for incomplete intents:
  *   PENDING  → nothing happened yet, delete the file
  *   DEBITED  → debit happened but credit didn't, complete the credit
+ *   CREDITED → credit already happened, just clean up the file
  */
 public class TransferService {
 
@@ -89,6 +90,12 @@ public class TransferService {
                         VHCCTweaks.LOGGER.error("CCVault: WAL recovery — FAILED to credit tx {}! File kept for retry.", intent.txId);
                         return; // Don't delete the file
                     }
+                    Files.deleteIfExists(file);
+                    break;
+
+                case "CREDITED":
+                    // Credit already happened — just clean up the stale WAL file
+                    VHCCTweaks.LOGGER.info("CCVault: WAL recovery — tx {} already CREDITED, cleaning up", intent.txId);
                     Files.deleteIfExists(file);
                     break;
 
@@ -158,11 +165,15 @@ public class TransferService {
             return TransferResult.fail("debit failed");
         }
 
-        // Step 3: Update intent to DEBITED
+        // Step 3: Update intent to DEBITED — this MUST succeed so recovery knows the debit happened
         intent.status = "DEBITED";
-        writeIntent(intent); // Best effort — if this fails, recovery will still see PENDING but debit happened.
-        // In the worst case, the PENDING file means recovery discards it, and the debit is "lost".
-        // This is a known edge case that is extremely unlikely (disk failure between two writes).
+        if (!writeIntent(intent)) {
+            // Can't record the debit — reverse it immediately to prevent token loss
+            VHCCTweaks.LOGGER.error("CCVault: tx {} — could not write DEBITED status! Reversing debit.", txId);
+            DogBridge.add(fromUuid, amount);
+            deleteIntent(txId);
+            return TransferResult.fail("internal error: transfer reversed (could not update WAL)");
+        }
 
         // Step 4: Credit destination
         if (!DogBridge.add(toUuid, amount)) {
@@ -173,15 +184,19 @@ public class TransferService {
             return TransferResult.fail("transfer partially failed — will be recovered automatically");
         }
 
-        // Step 5: Delete WAL file (transfer complete)
+        // Step 5: Mark as CREDITED (prevents double-credit if crash before WAL deletion)
+        intent.status = "CREDITED";
+        writeIntent(intent);
+
+        // Step 6: Delete WAL file (transfer complete)
         deleteIntent(txId);
 
-        // Step 6: Log to ledger and record rate limit
+        // Step 7: Log to ledger and record rate limit
         TransactionLedger.logTransfer(txId, fromUuid, toUuid, amount, reason, computerId,
                 playerUuid, hostUuid);
         RateLimiter.recordTransfer(computerId, playerUuid);
 
-        // Step 7: Notify both players via chat
+        // Step 8: Notify both players via chat
         BalanceNotifier.notifyDebit(fromUuid, amount, reason);
         if (!toUuid.equals(fromUuid)) {
             BalanceNotifier.notifyCredit(toUuid, amount, reason);
@@ -234,7 +249,7 @@ public class TransferService {
         String toUuid;
         long amount;
         String reason;
-        String status; // PENDING, DEBITED
+        String status; // PENDING, DEBITED, CREDITED
 
         TransferIntent(String txId, String fromUuid, String toUuid, long amount, String reason, String status) {
             this.txId = txId;

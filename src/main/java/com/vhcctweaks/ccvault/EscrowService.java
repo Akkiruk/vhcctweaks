@@ -70,28 +70,53 @@ public class EscrowService {
                 return;
             }
 
-            // Check if expired
-            if (System.currentTimeMillis() > hold.expiresAt) {
-                VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens to {}",
-                        hold.escrowId, hold.amount, hold.sourceUuid);
-                UUID sourceUuid = UUID.fromString(hold.sourceUuid);
-                if (DogBridge.add(sourceUuid, hold.amount)) {
-                    TransactionLedger.logTransfer(
-                            hold.escrowId + "-refund", sourceUuid, sourceUuid,
-                            hold.amount, "escrow auto-refund: " + hold.reason,
-                            hold.computerId, UUID.fromString(hold.playerUuid),
-                            hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null);
-                    BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow auto-refund (recovery)");
-                    VHCCTweaks.LOGGER.info("CCVault: Escrow {} auto-refunded successfully", hold.escrowId);
+            String status = hold.status != null ? hold.status : "HELD";
+            switch (status) {
+                case "PENDING":
+                    // Debit was never confirmed — safe to discard
+                    VHCCTweaks.LOGGER.info("CCVault: Escrow {} was PENDING (debit not confirmed) — discarding", hold.escrowId);
                     Files.deleteIfExists(file);
-                } else {
-                    VHCCTweaks.LOGGER.error("CCVault: Escrow {} auto-refund FAILED — file kept for retry", hold.escrowId);
-                }
-            } else {
-                // Still valid — reload into active map
-                activeEscrows.put(hold.escrowId, hold);
-                VHCCTweaks.LOGGER.info("CCVault: Reloaded active escrow {} ({} tokens, expires in {}s)",
-                        hold.escrowId, hold.amount, (hold.expiresAt - System.currentTimeMillis()) / 1000);
+                    break;
+
+                case "COMPLETED":
+                    // Already resolved/cancelled/refunded — just clean up the stale file
+                    VHCCTweaks.LOGGER.info("CCVault: Escrow {} was COMPLETED — cleaning up", hold.escrowId);
+                    Files.deleteIfExists(file);
+                    break;
+
+                case "HELD":
+                    // Active escrow with confirmed debit — check if expired
+                    if (System.currentTimeMillis() > hold.expiresAt) {
+                        VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens to {}",
+                                hold.escrowId, hold.amount, hold.sourceUuid);
+                        UUID sourceUuid = UUID.fromString(hold.sourceUuid);
+                        if (DogBridge.add(sourceUuid, hold.amount)) {
+                            TransactionLedger.logTransfer(
+                                    hold.escrowId + "-refund", sourceUuid, sourceUuid,
+                                    hold.amount, "escrow auto-refund: " + hold.reason,
+                                    hold.computerId, UUID.fromString(hold.playerUuid),
+                                    hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null);
+                            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow auto-refund (recovery)");
+                            // Mark as completed before deleting (crash-safe)
+                            hold.status = "COMPLETED";
+                            writeHold(hold);
+                            VHCCTweaks.LOGGER.info("CCVault: Escrow {} auto-refunded successfully", hold.escrowId);
+                            Files.deleteIfExists(file);
+                        } else {
+                            VHCCTweaks.LOGGER.error("CCVault: Escrow {} auto-refund FAILED — file kept for retry", hold.escrowId);
+                        }
+                    } else {
+                        // Still valid — reload into active map
+                        activeEscrows.put(hold.escrowId, hold);
+                        VHCCTweaks.LOGGER.info("CCVault: Reloaded active escrow {} ({} tokens, expires in {}s)",
+                                hold.escrowId, hold.amount, (hold.expiresAt - System.currentTimeMillis()) / 1000);
+                    }
+                    break;
+
+                default:
+                    VHCCTweaks.LOGGER.warn("CCVault: Escrow {} has unknown status '{}' — discarding", hold.escrowId, status);
+                    Files.deleteIfExists(file);
+                    break;
             }
         } catch (Exception e) {
             VHCCTweaks.LOGGER.error("CCVault: Escrow recovery failed for file {}", file.getFileName(), e);
@@ -151,11 +176,12 @@ public class EscrowService {
         long timeoutMs = ModConfig.CCVAULT_ESCROW_TIMEOUT_SECONDS.get() * 1000L;
         long expiresAt = System.currentTimeMillis() + timeoutMs;
 
-        // Write escrow to disk BEFORE deducting (so crash before debit = no hold file = safe)
+        // Phase 1: Write escrow as PENDING (debit not yet confirmed).
+        // If server crashes before debit, recovery discards PENDING files safely.
         EscrowHold hold = new EscrowHold(escrowId, sourceUuid.toString(), amount, reason,
                 computerId, playerUuid.toString(),
                 hostUuid != null ? hostUuid.toString() : null,
-                expiresAt, "HELD");
+                expiresAt, "PENDING");
 
         if (!writeHold(hold)) {
             return EscrowResult.fail("internal error: could not write escrow hold");
@@ -165,6 +191,16 @@ public class EscrowService {
         if (!DogBridge.remove(sourceUuid, amount)) {
             deleteHold(escrowId);
             return EscrowResult.fail("debit failed");
+        }
+
+        // Phase 2: Debit confirmed — update status to HELD.
+        // Recovery treats HELD as "tokens were debited, need refund if expired".
+        hold.status = "HELD";
+        if (!writeHold(hold)) {
+            // Can't persist confirmed status — reverse the debit to prevent token loss
+            DogBridge.add(sourceUuid, amount);
+            deleteHold(escrowId);
+            return EscrowResult.fail("internal error: could not confirm escrow — debit reversed");
         }
 
         // Record in active map
@@ -204,11 +240,28 @@ public class EscrowService {
             return EscrowResult.fail("escrow belongs to a different computer");
         }
 
+        // Security: recipient must be the original source or host — prevents player-swap exploit
+        // (e.g., Player A creates escrow, walks away, Player B interacts and resolves to themselves)
+        String recipientStr = recipientUuid.toString();
+        boolean isSource = recipientStr.equals(hold.sourceUuid);
+        boolean isHost = hold.hostUuid != null && recipientStr.equals(hold.hostUuid);
+        if (!isSource && !isHost) {
+            activeEscrows.put(escrowId, hold); // put back — wrong recipient
+            return EscrowResult.fail("recipient must be the original player or host");
+        }
+
         // Check if expired
         if (System.currentTimeMillis() > hold.expiresAt) {
-            // Auto-refund instead of resolving (escrow already removed from map)
+            // Auto-refund instead of resolving
             UUID sourceUuid = UUID.fromString(hold.sourceUuid);
-            DogBridge.add(sourceUuid, hold.amount);
+            if (!DogBridge.add(sourceUuid, hold.amount)) {
+                activeEscrows.put(escrowId, hold); // put back for retry
+                VHCCTweaks.LOGGER.error("CCVault: Escrow {} expired refund FAILED — preserved for retry", escrowId);
+                return EscrowResult.fail("escrow expired but refund failed — contact admin");
+            }
+            // Mark as completed before deleting (crash-safe: recovery sees COMPLETED → just deletes)
+            hold.status = "COMPLETED";
+            writeHold(hold);
             deleteHold(escrowId);
             BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, "escrow expired");
             return EscrowResult.fail("escrow expired — tokens auto-refunded to source");
@@ -226,7 +279,9 @@ public class EscrowService {
             return EscrowResult.fail("credit failed — escrow preserved, contact admin");
         }
 
-        // Success — clean up (escrow already removed from map above)
+        // Credit succeeded — mark as COMPLETED before deleting (prevents double-payout on crash recovery)
+        hold.status = "COMPLETED";
+        writeHold(hold);
         deleteHold(escrowId);
 
         // Log the resolution to ledger
@@ -236,8 +291,12 @@ public class EscrowService {
         TransactionLedger.logTransfer(txId, sourceUuid, recipientUuid, hold.amount,
                 "escrow resolve: " + reason, computerId, playerUuid, hostUuid);
 
-        // Notify the recipient
-        BalanceNotifier.notifyCredit(recipientUuid, hold.amount, reason);
+        // Notify — if returning to source it's a bet return, otherwise it's a credit to someone else
+        if (recipientUuid.equals(sourceUuid)) {
+            BalanceNotifier.notifyEscrowRefund(sourceUuid, hold.amount, reason + " (bet returned)");
+        } else {
+            BalanceNotifier.notifyCredit(recipientUuid, hold.amount, reason);
+        }
 
         VHCCTweaks.LOGGER.info("CCVault: Escrow {} resolved — {} tokens to {}", escrowId, hold.amount, recipientUuid);
         return EscrowResult.success(txId);
@@ -264,7 +323,9 @@ public class EscrowService {
             return EscrowResult.fail("refund failed — escrow preserved, contact admin");
         }
 
-        // Success — clean up (escrow already removed from map above)
+        // Refund succeeded — mark as COMPLETED before deleting (prevents double-refund on crash recovery)
+        hold.status = "COMPLETED";
+        writeHold(hold);
         deleteHold(escrowId);
 
         String txId = escrowId + "-cancel";
@@ -301,6 +362,9 @@ public class EscrowService {
                     VHCCTweaks.LOGGER.warn("CCVault: Escrow {} expired — auto-refunding {} tokens", escrowId, hold.amount);
                     UUID sourceUuid = UUID.fromString(hold.sourceUuid);
                     if (DogBridge.add(sourceUuid, hold.amount)) {
+                        // Refund succeeded — mark as COMPLETED before deleting (crash-safe)
+                        hold.status = "COMPLETED";
+                        writeHold(hold);
                         deleteHold(escrowId);
                         UUID playerUuid = UUID.fromString(hold.playerUuid);
                         UUID hostUuid = hold.hostUuid != null ? UUID.fromString(hold.hostUuid) : null;

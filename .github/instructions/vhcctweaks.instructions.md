@@ -21,9 +21,9 @@ applyTo: '**'
 
 Releases are fully automated via GitHub Actions + a local PowerShell script.
 
-### Quick Release (Recommended)
+### Every Change = Release
 
-Use the VS Code task **"Release New Version"** or run manually:
+**Every code change must go through the full release pipeline.** There are no "dev builds" or bare pushes without a version bump. Use the VS Code task **"Release New Version"** or run manually:
 
 ```powershell
 .\.vscode\release.ps1 -Version "2.2.0"
@@ -42,18 +42,9 @@ The `release.yml` GitHub Action then automatically creates a GitHub Release with
 
 Use `-DryRun` to preview changes without modifying anything.
 
-### Quick Push (Dev Builds)
-
-For work-in-progress changes that don't need a version bump, use the **"Quick Push to GitHub"** VS Code task or just `git push`. Every push to `master` automatically:
-- Builds the JAR via `build.yml`
-- Updates the **"Latest Dev Build"** pre-release on GitHub with the new JAR
-- Uploads the JAR as a CI artifact
-
-This means there is **always** a downloadable JAR on GitHub — either the latest tagged release or the latest dev build.
-
 ### CI Builds
 
-Every push/PR to `master` triggers `build.yml` which:
+Every push/PR to `master` also triggers `build.yml` which:
 1. Builds and uploads the JAR as a CI artifact
 2. Updates the `latest` pre-release tag with the newest dev build JAR
 

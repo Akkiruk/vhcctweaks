@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,3 +39,30 @@ jobs:
         with:
           name: vhcctweaks
           path: build/libs/vhcctweaks-*.jar
+
+      - name: Read version from gradle.properties
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        id: version
+        run: |
+          VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update latest dev build release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Dev Build (v${{ steps.version.outputs.version }} @ ${{ steps.version.outputs.short_sha }})"
+          body: |
+            **Automatic dev build** from the latest `master` commit.
+
+            Version: `${{ steps.version.outputs.version }}`
+            Commit: `${{ github.sha }}`
+            Built: ${{ github.event.head_commit.timestamp }}
+
+            > This is a pre-release build. For stable releases, see the [latest tagged release](https://github.com/${{ github.repository }}/releases/latest).
+          files: build/libs/vhcctweaks-*.jar
+          prerelease: true
+          make_latest: false

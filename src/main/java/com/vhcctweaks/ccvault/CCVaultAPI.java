@@ -4,6 +4,7 @@ import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
 import dan200.computercraft.api.lua.ILuaAPI;
+import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.server.ServerLifecycleHooks;
@@ -68,7 +69,7 @@ public class CCVaultAPI implements ILuaAPI {
      * Returns: true if sent, or nil + error message
      */
     @LuaFunction
-    public final Object[] requestAuth() throws Exception {
+    public final Object[] requestAuth() throws LuaException {
         ServerPlayer player = getInteractingPlayerOrThrow();
         String nonce = SessionAuthManager.requestAuth(player, computerId);
         if (nonce != null) {
@@ -100,7 +101,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      local bal, err = ccvault.getBalance("host")
      */
     @LuaFunction
-    public final Object[] getBalance(String target) throws Exception {
+    public final Object[] getBalance(String target) throws LuaException {
         requireAuth();
         UUID uuid = resolveTarget(target);
         long balance = DogBridge.getBalance(uuid);
@@ -125,7 +126,7 @@ public class CCVaultAPI implements ILuaAPI {
      * @param reason description string (max 64 chars, logged)
      */
     @LuaFunction
-    public final Object[] transfer(String from, String to, long amount, String reason) throws Exception {
+    public final Object[] transfer(String from, String to, long amount, String reason) throws LuaException {
         requireAuth();
 
         if (from == null || to == null) {
@@ -282,7 +283,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      if result then print("TX: " .. result.txId .. " test=" .. tostring(result.testMode)) end
      */
     @LuaFunction
-    public final Object[] transferSelf(long amount, String reason) throws Exception {
+    public final Object[] transferSelf(long amount, String reason) throws LuaException {
         requireAuth();
 
         if (amount <= 0) {
@@ -332,7 +333,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      if tx then print("Confirmed: " .. tx.amount .. " at " .. tx.timestamp) end
      */
     @LuaFunction
-    public final Object[] verifyTransaction(String txId) throws Exception {
+    public final Object[] verifyTransaction(String txId) throws LuaException {
         requireAuth();
 
         if (txId == null || txId.isBlank()) {
@@ -357,7 +358,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      for i, tx in ipairs(txs) do print(tx.txId, tx.amount, tx.reason) end
      */
     @LuaFunction
-    public final Object[] getTransactionHistory(int limit) throws Exception {
+    public final Object[] getTransactionHistory(int limit) throws LuaException {
         requireAuth();
 
         int maxResults = ModConfig.CCVAULT_MAX_HISTORY_RESULTS.get();
@@ -390,7 +391,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      end
      */
     @LuaFunction
-    public final Object[] escrow(long amount, String reason) throws Exception {
+    public final Object[] escrow(long amount, String reason) throws LuaException {
         requireAuth();
 
         if (amount <= 0) {
@@ -432,7 +433,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      local result, err = ccvault.resolveEscrow(escrowId, "player", "push / refund")
      */
     @LuaFunction
-    public final Object[] resolveEscrow(String escrowId, String recipient, String reason) throws Exception {
+    public final Object[] resolveEscrow(String escrowId, String recipient, String reason) throws LuaException {
         requireAuth();
 
         if (escrowId == null || escrowId.isBlank()) {
@@ -470,7 +471,7 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local result, err = ccvault.cancelEscrow(escrowId, "game cancelled")
      */
     @LuaFunction
-    public final Object[] cancelEscrow(String escrowId, String reason) throws Exception {
+    public final Object[] cancelEscrow(String escrowId, String reason) throws LuaException {
         requireAuth();
 
         if (escrowId == null || escrowId.isBlank()) {
@@ -504,7 +505,7 @@ public class CCVaultAPI implements ILuaAPI {
      *      if info then print(info.amount, info.timeRemaining) end
      */
     @LuaFunction
-    public final Object[] getEscrowInfo(String escrowId) throws Exception {
+    public final Object[] getEscrowInfo(String escrowId) throws LuaException {
         requireAuth();
 
         if (escrowId == null || escrowId.isBlank()) {
@@ -533,22 +534,22 @@ public class CCVaultAPI implements ILuaAPI {
 
     // ===== Internal helpers =====
 
-    private void requireAuth() throws Exception {
+    private void requireAuth() throws LuaException {
         ServerPlayer player = getInteractingPlayerOrThrow();
         if (!SessionAuthManager.isAuthenticated(player.getUUID(), computerId)) {
-            throw new Exception("not authenticated — call ccvault.requestAuth() first");
+            throw new LuaException("not authenticated — call ccvault.requestAuth() first");
         }
     }
 
-    private ServerPlayer getInteractingPlayerOrThrow() throws Exception {
+    private ServerPlayer getInteractingPlayerOrThrow() throws LuaException {
         ServerPlayer player = ComputerInteractionTracker.getFreshPlayer(computerId);
         if (player == null) {
-            throw new Exception("no player interacting with this computer (or interaction expired)");
+            throw new LuaException("no player interacting with this computer (or interaction expired)");
         }
         return player;
     }
 
-    private UUID resolveTarget(String target) throws Exception {
+    private UUID resolveTarget(String target) throws LuaException {
         return switch (target.toLowerCase()) {
             case "player" -> {
                 ServerPlayer p = getInteractingPlayerOrThrow();
@@ -557,11 +558,11 @@ public class CCVaultAPI implements ILuaAPI {
             case "host" -> {
                 UUID owner = ComputerPlacementTracker.getOwner(computerId);
                 if (owner == null) {
-                    throw new Exception("computer has no registered owner — place it to register");
+                    throw new LuaException("computer has no registered owner — place it to register");
                 }
                 yield owner;
             }
-            default -> throw new Exception("invalid target '" + target + "' — use 'player' or 'host'");
+            default -> throw new LuaException("invalid target '" + target + "' — use 'player' or 'host'");
         };
     }
 

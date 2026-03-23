@@ -15,25 +15,43 @@
 
 ## Release Process (Automated)
 
-Releases are fully automated via GitHub Actions. To publish a new version:
+Releases are fully automated via GitHub Actions + a local PowerShell script.
 
-1. **Update `gradle.properties`** — bump `mod_version` (e.g., `2.1.0` → `2.2.0`)
-2. **Update `CHANGELOG.md`** — add a new `## [X.Y.Z] - YYYY-MM-DD` section at the top with changes
-3. **Update `README.md`** — bump any version references (badge, installation section, build output)
-4. **Commit** — `git commit -am "Release vX.Y.Z"`
-5. **Tag** — `git tag vX.Y.Z`
-6. **Push** — `git push && git push --tags`
+### Quick Release (Recommended)
 
-The `release.yml` workflow will automatically:
-- Build the JAR
-- Extract the changelog section for that version
-- Create a GitHub Release with the JAR attached
+Use the VS Code task **"Release New Version"** or run manually:
 
-> **Important:** The tag must match `vX.Y.Z` format and the version in `gradle.properties` must match (without the `v` prefix). The CHANGELOG.md section header must be `## [X.Y.Z]` for release notes extraction to work.
+```powershell
+.\.vscode\release.ps1 -Version "2.2.0"
+```
+
+This single command handles everything:
+1. Validates clean working tree and correct branch
+2. Bumps version in `gradle.properties`
+3. Adds changelog section to `CHANGELOG.md`
+4. Updates version references in `README.md`
+5. Builds the JAR with Gradle
+6. Deploys to local Minecraft instance
+7. Commits, tags (`vX.Y.Z`), and pushes
+
+The `release.yml` GitHub Action then automatically creates a GitHub Release with the JAR attached.
+
+Use `-DryRun` to preview changes without modifying anything.
+
+### Quick Push (Dev Builds)
+
+For work-in-progress changes that don't need a version bump, use the **"Quick Push to GitHub"** VS Code task or just `git push`. Every push to `master` automatically:
+- Builds the JAR via `build.yml`
+- Updates the **"Latest Dev Build"** pre-release on GitHub with the new JAR
+- Uploads the JAR as a CI artifact
+
+This means there is **always** a downloadable JAR on GitHub — either the latest tagged release or the latest dev build.
 
 ### CI Builds
 
-Every push/PR to `master` triggers `build.yml` which builds and uploads the JAR as a CI artifact (not a release).
+Every push/PR to `master` triggers `build.yml` which:
+1. Builds and uploads the JAR as a CI artifact
+2. Updates the `latest` pre-release tag with the newest dev build JAR
 
 ## Version Checklist
 
@@ -45,14 +63,14 @@ When bumping the version, update ALL of these:
 
 ## Build Dependencies
 
-Compile-only dependencies (not bundled in the JAR):
-- `cc-tweaked-1.18.2:1.101.3` — from SquidDev Maven
-- `AdvancedPeripherals-1.18.2-0.7.31r.jar` — downloaded from Modrinth in CI
-- `the_vault-1.18.2-3.20.3.6055.jar` — from local `../mods/` (not in CI, uses compileOnly)
-- `curios-forge-1.18.2-5.0.9.2.jar` — from local `../mods/`
-- `jei-1.18.2-9.7.2.1001.jar` — downloaded from Modrinth in CI
+Compile-only dependencies (not bundled in the JAR, all stored in `libs/` via Git LFS):
+- `cc-tweaked-1.18.2:1.101.3` — from SquidDev Maven (in `build.gradle`)
+- `AdvancedPeripherals-1.18.2-0.7.31r.jar` — Git LFS
+- `the_vault-1.18.2-3.20.3.6055.jar` — Git LFS
+- `curios-forge-1.18.2-5.0.9.2.jar` — Git LFS
+- `jei-1.18.2-9.7.2.1001.jar` — Git LFS
 
-The Vault and Curios JARs are only needed for local development (mixin compile targets). CI can build without them since they're `compileOnly`.
+All LFS-tracked JARs are pulled automatically in CI (`checkout` with `lfs: true`).
 
 ## Local Deploy (Required)
 

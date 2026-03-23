@@ -2,6 +2,14 @@
 
 All notable changes to VH CC Tweaks are documented here.
 
+## [2.2.1] - 2026-03-23
+
+### Changed
+- Removed CCVault escrow runtime and Lua API methods (scrow, esolveEscrow, cancelEscrow, getEscrowInfo).
+- Migrated economy flow to transfer-at-end settlement across integrated game scripts and references.
+- Removed escrow-related config keys and server tick/recovery wiring.
+- Updated API documentation to reflect transfer-at-end model.
+
 ## [2.2.0] - 2026-03-23
 
 ### Security

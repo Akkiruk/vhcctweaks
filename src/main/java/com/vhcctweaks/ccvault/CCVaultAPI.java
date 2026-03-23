@@ -414,6 +414,7 @@ public class CCVaultAPI implements ILuaAPI {
         if (!SessionAuthManager.isAuthenticated(player.getUUID(), computerId)) {
             throw new LuaException("not authenticated — call ccvault.requestAuth() first");
         }
+        SessionAuthManager.touchSession(player.getUUID(), computerId);
     }
 
     private ServerPlayer getInteractingPlayerOrThrow() throws LuaException {

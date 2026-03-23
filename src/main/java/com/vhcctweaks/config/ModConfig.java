@@ -16,6 +16,7 @@ public class ModConfig {
     // CCVault economy
     public static final ForgeConfigSpec.BooleanValue CCVAULT_ENABLED;
     public static final ForgeConfigSpec.IntValue CCVAULT_NONCE_EXPIRY_SECONDS;
+    public static final ForgeConfigSpec.IntValue CCVAULT_SESSION_IDLE_TIMEOUT_MINUTES;
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_TRANSFERS_PER_MIN_TERMINAL;
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_TRANSFERS_PER_MIN_PLAYER;
     public static final ForgeConfigSpec.LongValue CCVAULT_MAX_TRANSFER_AMOUNT;
@@ -58,6 +59,10 @@ public class ModConfig {
         CCVAULT_NONCE_EXPIRY_SECONDS = builder
                 .comment("How long (in seconds) an auth approval nonce stays valid before expiring.")
                 .defineInRange("nonceExpirySeconds", 60, 10, 300);
+        CCVAULT_SESSION_IDLE_TIMEOUT_MINUTES = builder
+                .comment("How long an approved CCVault terminal authorization stays valid without activity.",
+                         "Authorization is also cleared immediately when the player disconnects.")
+                .defineInRange("sessionIdleTimeoutMinutes", 30, 1, 240);
         CCVAULT_MAX_TRANSFERS_PER_MIN_TERMINAL = builder
                 .comment("Maximum transfers per minute per terminal.")
                 .defineInRange("maxTransfersPerMinTerminal", 10, 1, 100);

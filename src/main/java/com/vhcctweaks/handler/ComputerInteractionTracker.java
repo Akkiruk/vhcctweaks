@@ -1,6 +1,7 @@
 package com.vhcctweaks.handler;
 
 import com.vhcctweaks.VHCCTweaks;
+import com.vhcctweaks.ccvault.SessionAuthManager;
 import com.vhcctweaks.config.ModConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -62,8 +63,10 @@ public class ComputerInteractionTracker {
 
             if (computerId >= 0) {
                 computerToPlayer.put(computerId, player.getUUID());
-                interactionTimestamps.put(computerId, System.currentTimeMillis());
+                long now = System.currentTimeMillis();
+                interactionTimestamps.put(computerId, now);
                 onlinePlayers.put(player.getUUID(), player);
+                SessionAuthManager.touchSession(player.getUUID(), computerId);
 
                 // First interaction with an unowned computer assigns permanent owner
                 if (ComputerPlacementTracker.getOwner(computerId) == null) {

@@ -14,7 +14,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import java.security.SecureRandom;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,8 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 1. CC script calls ccvault.requestAuth()
  * 2. Server sends the interacting player a clickable chat message with a nonce
  * 3. Player clicks → runs /ccvault approve <nonce>
- * 4. Session created: (playerUUID, computerID) → authenticated
- * 5. Session cleared on player disconnect
+ * 4. Session created: computerID → authenticated player session
+ * 5. Session expires after inactivity timeout or clears on player disconnect
  *
  * Each nonce is single-use and expires after a configurable timeout.
  */
@@ -36,18 +35,15 @@ public class SessionAuthManager {
     private static final String NONCE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int NONCE_LENGTH = 12;
 
-    // Active authenticated sessions: sessionKey → true
-    private static final Set<SessionKey> activeSessions = ConcurrentHashMap.newKeySet();
-
     // Current authenticated principal per computer.
     // Exactly one player may hold an active auth session for a computer at a time.
-    private static final Map<Integer, UUID> computerAuthenticatedPlayer = new ConcurrentHashMap<>();
+    private static final Map<Integer, AuthSession> computerSessions = new ConcurrentHashMap<>();
 
     // Pending nonces: nonce string → PendingAuth
     private static final Map<String, PendingAuth> pendingNonces = new ConcurrentHashMap<>();
 
-    /** Composite key for an authenticated session. */
-    private record SessionKey(UUID playerUuid, int computerId) {}
+    /** An authenticated session for a computer. */
+    private record AuthSession(UUID playerUuid, long lastActivityAt) {}
 
     /** A pending auth request waiting for the player to click approve. */
     private record PendingAuth(UUID playerUuid, int computerId, long expiresAt) {}
@@ -56,16 +52,32 @@ public class SessionAuthManager {
      * Check if a player is authenticated for a specific computer this session.
      */
     public static boolean isAuthenticated(UUID playerUuid, int computerId) {
-        UUID boundPlayer = computerAuthenticatedPlayer.get(computerId);
-        if (!Objects.equals(boundPlayer, playerUuid)) return false;
-        return activeSessions.contains(new SessionKey(playerUuid, computerId));
+        AuthSession session = getActiveSession(computerId);
+        return session != null && Objects.equals(session.playerUuid(), playerUuid);
     }
 
     /**
      * Get the UUID currently authenticated for a computer, or null if none.
      */
     public static UUID getAuthenticatedPlayer(int computerId) {
-        return computerAuthenticatedPlayer.get(computerId);
+        AuthSession session = getActiveSession(computerId);
+        return session != null ? session.playerUuid() : null;
+    }
+
+    /**
+     * Refresh session activity for an already authenticated player.
+     */
+    public static void touchSession(UUID playerUuid, int computerId) {
+        long now = System.currentTimeMillis();
+        computerSessions.computeIfPresent(computerId, (id, session) -> {
+            if (sessionExpired(session, now)) {
+                return null;
+            }
+            if (!Objects.equals(session.playerUuid(), playerUuid)) {
+                return session;
+            }
+            return new AuthSession(playerUuid, now);
+        });
     }
 
     /**
@@ -76,6 +88,7 @@ public class SessionAuthManager {
         // Clean expired nonces lazily
         long now = System.currentTimeMillis();
         pendingNonces.values().removeIf(p -> p.expiresAt() < now);
+        purgeExpiredSessions(now);
 
         // Don't spam — check if already pending for this player+computer
         for (PendingAuth pending : pendingNonces.values()) {
@@ -116,12 +129,11 @@ public class SessionAuthManager {
         PendingAuth pending = pendingNonces.remove(nonce);
         if (pending == null) return false;
         if (!pending.playerUuid().equals(playerUuid)) return false;
-        if (pending.expiresAt() < System.currentTimeMillis()) return false;
+        long now = System.currentTimeMillis();
+        if (pending.expiresAt() < now) return false;
 
         // Replace any existing auth principal for this computer.
-        activeSessions.removeIf(key -> key.computerId() == pending.computerId());
-        activeSessions.add(new SessionKey(playerUuid, pending.computerId()));
-        computerAuthenticatedPlayer.put(pending.computerId(), playerUuid);
+        computerSessions.put(pending.computerId(), new AuthSession(playerUuid, now));
         VHCCTweaks.LOGGER.debug("CCVault: Player {} authenticated for computer {}", playerUuid, pending.computerId());
         return true;
     }
@@ -130,19 +142,15 @@ public class SessionAuthManager {
      * Revoke a player's session for a specific computer.
      */
     public static void revokeSession(UUID playerUuid, int computerId) {
-        activeSessions.remove(new SessionKey(playerUuid, computerId));
-        UUID bound = computerAuthenticatedPlayer.get(computerId);
-        if (Objects.equals(bound, playerUuid)) {
-            computerAuthenticatedPlayer.remove(computerId);
-        }
+        computerSessions.computeIfPresent(computerId, (id, session) ->
+                Objects.equals(session.playerUuid(), playerUuid) ? null : session);
     }
 
     /**
      * Clear all sessions for a player (called on disconnect).
      */
     public static void clearPlayerSessions(UUID playerUuid) {
-        activeSessions.removeIf(key -> key.playerUuid().equals(playerUuid));
-        computerAuthenticatedPlayer.entrySet().removeIf(e -> e.getValue().equals(playerUuid));
+        computerSessions.entrySet().removeIf(e -> e.getValue().playerUuid().equals(playerUuid));
         pendingNonces.values().removeIf(p -> p.playerUuid().equals(playerUuid));
     }
 
@@ -160,5 +168,25 @@ public class SessionAuthManager {
             sb.append(NONCE_CHARS.charAt(RANDOM.nextInt(NONCE_CHARS.length())));
         }
         return sb.toString();
+    }
+
+    private static AuthSession getActiveSession(int computerId) {
+        long now = System.currentTimeMillis();
+        AuthSession session = computerSessions.get(computerId);
+        if (session == null) return null;
+        if (sessionExpired(session, now)) {
+            computerSessions.remove(computerId, session);
+            return null;
+        }
+        return session;
+    }
+
+    private static void purgeExpiredSessions(long now) {
+        computerSessions.entrySet().removeIf(entry -> sessionExpired(entry.getValue(), now));
+    }
+
+    private static boolean sessionExpired(AuthSession session, long now) {
+        long timeoutMs = ModConfig.CCVAULT_SESSION_IDLE_TIMEOUT_MINUTES.get() * 60_000L;
+        return now - session.lastActivityAt() > timeoutMs;
     }
 }

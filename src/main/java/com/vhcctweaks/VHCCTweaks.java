@@ -51,6 +51,8 @@ public class VHCCTweaks {
 
         // Patch VH config files early (adds CC entries to blacklists/researches)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
+        // Patch CC:Tweaked monitor size limits in defaultconfigs and save serverconfigs.
+        VaultConfigPatcher.patchGameConfigsIfNeeded(FMLPaths.GAMEDIR.get());
 
         // Data directory for all vhcctweaks persistent storage
         Path dataDir = FMLPaths.GAMEDIR.get().resolve("vhcc_data");

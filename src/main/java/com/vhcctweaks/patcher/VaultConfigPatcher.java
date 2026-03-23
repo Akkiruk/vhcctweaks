@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Patches Vault Hunters config JSON files on startup to add CC:Tweaked entries.
@@ -18,6 +20,8 @@ public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String CC_WILDCARD = "computercraft:*";
     private static final String AP_WILDCARD = "advancedperipherals:*";
+    private static final int MONITOR_MAX_WIDTH = 16;
+    private static final int MONITOR_MAX_HEIGHT = 16;
 
     public static void patchIfNeeded(Path configDir) {
         try {
@@ -49,6 +53,14 @@ public class VaultConfigPatcher {
             patchAPConfigs(configDir);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.warn("Could not patch Advanced Peripherals configs: {}", e.getMessage());
+        }
+    }
+
+    public static void patchGameConfigsIfNeeded(Path gameDir) {
+        try {
+            patchComputerCraftConfigs(gameDir);
+        } catch (Exception e) {
+            VHCCTweaks.LOGGER.warn("Could not patch ComputerCraft configs: {}", e.getMessage());
         }
     }
 
@@ -477,6 +489,73 @@ public class VaultConfigPatcher {
                 VHCCTweaks.LOGGER.info("Patched AP world.toml (disabled book on join)");
             }
         }
+    }
+
+    private static void patchComputerCraftConfigs(Path gameDir) throws IOException {
+        patchComputerCraftMonitorToml(gameDir.resolve("defaultconfigs").resolve("computercraft-server.toml"));
+
+        Path savesDir = gameDir.resolve("saves");
+        if (!Files.isDirectory(savesDir)) {
+            VHCCTweaks.LOGGER.info("No saves directory found, skipping ComputerCraft save config patches");
+            return;
+        }
+
+        try (var saves = Files.list(savesDir)) {
+            saves.filter(Files::isDirectory)
+                    .map(saveDir -> saveDir.resolve("serverconfig").resolve("computercraft-server.toml"))
+                    .forEach(VaultConfigPatcher::patchComputerCraftMonitorTomlUnchecked);
+        }
+    }
+
+    private static void patchComputerCraftMonitorTomlUnchecked(Path path) {
+        try {
+            patchComputerCraftMonitorToml(path);
+        } catch (IOException e) {
+            VHCCTweaks.LOGGER.warn("Could not patch {}: {}", path, e.getMessage());
+        }
+    }
+
+    private static void patchComputerCraftMonitorToml(Path path) throws IOException {
+        if (!Files.exists(path)) return;
+
+        String content = Files.readString(path, StandardCharsets.UTF_8);
+        String patched = patchMonitorSizeSection(content, MONITOR_MAX_WIDTH, MONITOR_MAX_HEIGHT);
+
+        if (!patched.equals(content)) {
+            Files.writeString(path, patched, StandardCharsets.UTF_8);
+            VHCCTweaks.LOGGER.info("Raised ComputerCraft monitor max size to {}x{} in {}", MONITOR_MAX_WIDTH, MONITOR_MAX_HEIGHT, path);
+        }
+    }
+
+    private static String patchMonitorSizeSection(String content, int width, int height) {
+        String[] lines = content.split("\\r?\\n", -1);
+        String lineSeparator = content.contains("\r\n") ? "\r\n" : "\n";
+        StringBuilder result = new StringBuilder(content.length() + 32);
+        boolean inMonitorSection = false;
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmed = line.trim();
+
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                inMonitorSection = "[term_sizes.monitor]".equals(trimmed);
+            } else if (inMonitorSection) {
+                line = patchMonitorSetting(line, "width", width);
+                line = patchMonitorSetting(line, "height", height);
+            }
+
+            if (i > 0) result.append(lineSeparator);
+            result.append(line);
+        }
+
+        return result.toString();
+    }
+
+    private static String patchMonitorSetting(String line, String key, int value) {
+        Pattern pattern = Pattern.compile("^(\\s*)" + Pattern.quote(key) + "\\s*=\\s*\\d+(\\s*(?:#.*)?)$");
+        Matcher matcher = pattern.matcher(line);
+        if (!matcher.matches()) return line;
+        return matcher.group(1) + key + " = " + value + matcher.group(2);
     }
 
     private static String patchTomlBool(String content, String key, boolean value) {

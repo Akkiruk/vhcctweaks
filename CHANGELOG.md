@@ -2,6 +2,11 @@
 
 All notable changes to VH CC Tweaks are documented here.
 
+## [2.2.4] - 2026-03-24
+
+### Changed
+- Raised CC:Tweaked monitor max size to 16x16 by automatically patching ComputerCraft server configs.
+
 ## [2.2.3] - 2026-03-23
 
 ### Fixed

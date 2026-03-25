@@ -42,7 +42,7 @@ public class VHCCTweaks {
         MinecraftForge.EVENT_BUS.register(CraftingLockHandler.class);
         // Track which player last interacted with each CC computer
         MinecraftForge.EVENT_BUS.register(ComputerInteractionTracker.class);
-        // Track which player placed each CC computer (host UUID for CCVault)
+        // Track which player owns each CC computer (host UUID for CCVault)
         MinecraftForge.EVENT_BUS.register(ComputerPlacementTracker.class);
         // Session auth cleanup on player disconnect
         MinecraftForge.EVENT_BUS.register(SessionAuthManager.class);

@@ -13,8 +13,8 @@
 --    * All money operations require the player to authenticate first.
 --    * Auth is per-session — it resets every time the player disconnects.
 --
---  "player" = the person currently right-clicking / using the computer
---  "host"   = the person who placed the computer block in the world
+--  "player" = the person currently interacting with / using the computer
+--  "host"   = the person who first registered the computer
 --
 -- ============================================================================
 
@@ -47,7 +47,7 @@ end
 -- This message is impossible for your script to fake. The player clicks
 -- [APPROVE] and your terminal is authorized for the rest of their session.
 --
--- IMPORTANT: The player must have right-clicked your computer/monitor FIRST.
+-- IMPORTANT: The player must have interacted with your computer FIRST.
 -- If nobody has interacted with the computer, requestAuth() will error.
 
 -- Step 1: Wait for a player to interact
@@ -139,7 +139,7 @@ end
 -- ============================================================================
 
 -- getPlayerName() -> string | nil
--- Returns the username of whoever last right-clicked this computer.
+-- Returns the username of whoever last interacted with this computer.
 -- Returns nil if nobody has interacted yet.
 local name = ccvault.getPlayerName()
 
@@ -296,14 +296,14 @@ end
 -- ============================================================================
 
 --  "no player interacting with this computer"
---      Nobody has right-clicked this computer yet. Can't do anything.
+--      Nobody has interacted with this computer yet. Can't do anything.
 --
 --  "not authenticated — call ccvault.requestAuth() first"
 --      The player hasn't approved this terminal yet. Send requestAuth().
 --
---  "computer has no registered owner — place it to register"
---      The computer was placed before vhcctweaks was installed, or
---      something went wrong. Break and re-place the computer.
+--  "computer has no registered owner - interact with it once to register"
+--      The computer has not been used yet, or ownership was never recorded.
+--      Use it once to register the host account.
 --
 --  "insufficient balance"
 --      Source account doesn't have enough tokens.
@@ -393,7 +393,7 @@ end
 -- * You cannot forge the authentication prompt (it's a server chat message).
 -- * You cannot bypass rate limits.
 -- * You cannot exceed the per-transfer cap set by the server.
--- * You cannot operate on a player who hasn't recently right-clicked.
+-- * You cannot operate on a player who hasn't recently interacted.
 -- * Every transfer is permanently logged in a server-side ledger.
 
 

@@ -9,8 +9,8 @@
 
 CCVault lets ComputerCraft scripts move **Vault Tokens** between two parties:
 
-- **`"player"`** — the person currently using the terminal (right-clicked it)
-- **`"host"`** — the person who placed the computer block
+- **`"player"`** — the person currently using the terminal (right-clicked a block or used a pocket computer)
+- **`"host"`** — the person who first registered the computer
 
 That's it. No raw UUIDs, no arbitrary targeting, no creating or destroying tokens. Every debit has an equal credit. The server controls everything — your script just asks nicely.
 
@@ -49,7 +49,7 @@ end
 
 ## How Authentication Works
 
-1. Player **right-clicks** the computer or monitor
+1. Player **interacts** with the computer, monitor, or pocket computer
 2. Your script calls **`ccvault.requestAuth()`**
 3. The **server** sends a clickable chat message:
 
@@ -81,7 +81,7 @@ Returns `true` if Dog's PlayerShops is loaded and the economy system is active.
 | `ccvault.requestAuth()` | `true` \| `nil, error` | No |
 | `ccvault.isAuthenticated()` | `boolean` | No |
 
-**`requestAuth()`** sends the clickable approval message to the player's chat. Throws if no player has right-clicked the computer yet.
+**`requestAuth()`** sends the clickable approval message to the player's chat. Throws if no player is currently interacting with the computer yet.
 
 **`isAuthenticated()`** returns whether the current interacting player has an active session with this terminal.
 
@@ -143,8 +143,8 @@ result.txId     -- "18f3a2b0-4c7e..."  (unique transaction ID)
 | `ccvault.getHostName()` | `string` \| `nil, error` | No |
 | `ccvault.getComputerId()` | `number` | No |
 
-- **`getPlayerName()`** — username of whoever last right-clicked. `nil` if nobody has.
-- **`getHostName()`** — username of whoever placed the computer. Returns UUID string if owner is offline. `nil` if unregistered.
+- **`getPlayerName()`** — username of whoever last interacted. `nil` if nobody has.
+- **`getHostName()`** — username of whoever first registered the computer. Returns UUID string if owner is offline. `nil` if unregistered.
 - **`getComputerId()`** — this computer's CC ID. Show this to players so they can run `/ccvault revoke <id>` if needed.
 
 ---
@@ -280,9 +280,9 @@ end
 
 | Error | Meaning |
 |-------|---------|
-| `no player interacting with this computer` | Nobody has right-clicked yet |
+| `no player interacting with this computer` | Nobody has interacted yet |
 | `not authenticated — call ccvault.requestAuth() first` | Player hasn't approved this terminal |
-| `computer has no registered owner — place it to register` | Break and re-place the computer |
+| `computer has no registered owner - interact with it once to register` | Use the computer once to register ownership |
 | `insufficient balance` | Source doesn't have enough tokens |
 | `amount must be positive` | You passed 0 or negative |
 | `cannot transfer to self` | `from` and `to` are the same |
@@ -322,7 +322,7 @@ end
 | Max transfer amount | 1,000,000 | Per-transaction cap |
 | Terminal rate limit | 10/min | Max transfers per computer per minute |
 | Player rate limit | 20/min | Max transfers per player per minute |
-| Interaction staleness | 30 seconds | Right-click must be this recent for financial ops |
+| Interaction staleness | 30 seconds | A recent interaction or pocket use must still be fresh for financial ops |
 | Max history results | 50 | Max entries returned by getTransactionHistory |
 
 Server admins can change all of these in the vhcctweaks server config.
@@ -339,7 +339,7 @@ Server admins can change all of these in the vhcctweaks server config.
 - ❌ Read balances without player authentication
 - ❌ Forge the authentication prompt
 - ❌ Bypass rate limits or transfer caps
-- ❌ Operate on a player who hasn't recently right-clicked
+- ❌ Operate on a player who hasn't recently interacted
 
 **The server guarantees:**
 

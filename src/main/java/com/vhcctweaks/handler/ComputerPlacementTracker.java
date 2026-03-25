@@ -22,16 +22,17 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Tracks which player placed each CC:Tweaked computer block.
- * This determines the "host" UUID — the account that owns the terminal
- * for CCVault purposes. Persists to vhcc_data/ccvault/owners.json.
+ * Tracks the permanent host owner for each CC:Tweaked computer ID.
+ * Ownership is assigned on first interaction, which supports both
+ * placed computers and pocket computers. Persists to
+ * vhcc_data/ccvault/owners.json.
  */
 public class ComputerPlacementTracker {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type MAP_TYPE = new TypeToken<Map<String, String>>() {}.getType();
 
-    // computerID (String for JSON compat) → placer UUID
+    // computerID (String for JSON compat) -> owner UUID
     private static final Map<Integer, UUID> computerOwners = new ConcurrentHashMap<>();
     private static Path persistPath;
 
@@ -65,7 +66,7 @@ public class ComputerPlacementTracker {
         }
     }
 
-    /** Get the UUID of the player who placed the computer, or null if unknown. */
+    /** Get the UUID of the player who owns the computer, or null if unknown. */
     public static UUID getOwner(int computerId) {
         return computerOwners.get(computerId);
     }

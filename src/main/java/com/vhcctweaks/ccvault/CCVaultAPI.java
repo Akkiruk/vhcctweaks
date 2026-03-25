@@ -36,6 +36,8 @@ import java.util.UUID;
 public class CCVaultAPI implements ILuaAPI {
 
     private static final int MAX_REASON_LENGTH = 64;
+    private static final String OWNER_REGISTRATION_MESSAGE =
+            "computer has no registered owner - interact with it once to register";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final int computerId;
@@ -190,7 +192,7 @@ public class CCVaultAPI implements ILuaAPI {
     }
 
     /**
-     * Get the computer owner's username (the player who placed this computer).
+     * Get the computer owner's username (the player who first registered this computer).
      * Returns nil if the owner is unknown or offline.
      * Lua: local name = ccvault.getHostName()
      */
@@ -198,7 +200,7 @@ public class CCVaultAPI implements ILuaAPI {
     public final Object[] getHostName() {
         UUID owner = ComputerPlacementTracker.getOwner(computerId);
         if (owner == null) {
-            return new Object[]{null, "computer has no registered owner"};
+            return new Object[]{null, OWNER_REGISTRATION_MESSAGE};
         }
         // Try to get the player name from the server
         ServerPlayer player = getServerPlayerByUuid(owner);
@@ -307,7 +309,7 @@ public class CCVaultAPI implements ILuaAPI {
         UUID hostUuid = ComputerPlacementTracker.getOwner(computerId);
 
         if (hostUuid == null) {
-            return new Object[]{null, "computer has no registered owner — place it to register"};
+            return new Object[]{null, OWNER_REGISTRATION_MESSAGE};
         }
         if (!playerUuid.equals(hostUuid)) {
             return new Object[]{null, "transferSelf is only for same-person sessions (player must be host)"};
@@ -434,7 +436,7 @@ public class CCVaultAPI implements ILuaAPI {
             case "host" -> {
                 UUID owner = ComputerPlacementTracker.getOwner(computerId);
                 if (owner == null) {
-                    throw new LuaException("computer has no registered owner — place it to register");
+                    throw new LuaException(OWNER_REGISTRATION_MESSAGE);
                 }
                 yield owner;
             }

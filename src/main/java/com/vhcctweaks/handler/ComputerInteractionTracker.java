@@ -3,27 +3,33 @@ package com.vhcctweaks.handler;
 import com.vhcctweaks.VHCCTweaks;
 import com.vhcctweaks.ccvault.SessionAuthManager;
 import com.vhcctweaks.config.ModConfig;
+import dan200.computercraft.shared.computer.inventory.ContainerComputerBase;
+import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Tracks which player last interacted with each CC:Tweaked computer.
- * Uses the right-click event on computercraft blocks and reads the
- * computer ID from the block entity via reflection.
+ * Tracks which player last interacted with each CC:Tweaked computer,
+ * including placed blocks, monitors, and pocket computers.
  *
  * Supports monitor clicks: when a player right-clicks a CC monitor,
  * the tracker walks the multi-block monitor structure and finds the
- * adjacent computer to associate the interaction with.
+ * adjacent computer to associate the interaction with. Pocket computers
+ * are registered on item use and then refreshed while a computer menu
+ * is open so long-lived sessions do not go stale mid-interaction.
  */
 public class ComputerInteractionTracker {
 
@@ -61,23 +67,43 @@ public class ComputerInteractionTracker {
                 computerId = findComputerAdjacentToMonitor(level, pos);
             }
 
-            if (computerId >= 0) {
-                computerToPlayer.put(computerId, player.getUUID());
-                long now = System.currentTimeMillis();
-                interactionTimestamps.put(computerId, now);
-                onlinePlayers.put(player.getUUID(), player);
-                SessionAuthManager.touchSession(player.getUUID(), computerId);
-
-                // First interaction with an unowned computer assigns permanent owner
-                if (ComputerPlacementTracker.getOwner(computerId) == null) {
-                    UUID hostUuid = player.getUUID();
-                    ComputerPlacementTracker.setOwner(computerId, hostUuid);
-                    VHCCTweaks.LOGGER.info("CCVault: Computer {} assigned host {} on first interaction",
-                            computerId, hostUuid);
-                }
-            }
+            recordInteraction(player, computerId);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing right-click: {}", e.getMessage());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+        try {
+            if (event.getWorld().isClientSide()) return;
+            if (!(event.getPlayer() instanceof ServerPlayer player)) return;
+            if (!(event.getWorld() instanceof ServerLevel level)) return;
+
+            ItemStack stack = event.getItemStack();
+            if (!(stack.getItem() instanceof ItemPocketComputer pocketComputer)) return;
+
+            int computerId = pocketComputer.getComputerID(stack);
+            if (computerId < 0) {
+                computerId = pocketComputer.createServerComputer(level, player, player.getInventory(), stack).getID();
+            }
+
+            recordInteraction(player, computerId);
+        } catch (Exception e) {
+            VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing pocket use: {}", e.getMessage());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        if (!(event.player instanceof ServerPlayer player)) return;
+        if (!(player.containerMenu instanceof ContainerComputerBase menu)) return;
+
+        try {
+            recordInteraction(player, menu.getComputer().getID());
+        } catch (Exception e) {
+            VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error refreshing menu session: {}", e.getMessage());
         }
     }
 
@@ -159,5 +185,24 @@ public class ComputerInteractionTracker {
     /** Get the UUID of the player who last interacted, regardless of staleness. */
     public static UUID getPlayerUuid(int computerId) {
         return computerToPlayer.get(computerId);
+    }
+
+    private static void recordInteraction(ServerPlayer player, int computerId) {
+        if (computerId < 0) return;
+
+        computerToPlayer.put(computerId, player.getUUID());
+        long now = System.currentTimeMillis();
+        interactionTimestamps.put(computerId, now);
+        onlinePlayers.put(player.getUUID(), player);
+        SessionAuthManager.touchSession(player.getUUID(), computerId);
+
+        // First interaction with an unowned computer assigns permanent owner.
+        if (ComputerPlacementTracker.getOwner(computerId) == null) {
+            UUID hostUuid = player.getUUID();
+            if (ComputerPlacementTracker.setOwner(computerId, hostUuid)) {
+                VHCCTweaks.LOGGER.info("CCVault: Computer {} assigned host {} on first interaction",
+                        computerId, hostUuid);
+            }
+        }
     }
 }

@@ -7,7 +7,8 @@
     "EnvironmentDetectorMixin",
     "ChatBoxEventsMixin",
     "ChatBoxPeripheralMixin",
-    "RecipeResolverMixin"
+    "RecipeResolverMixin",
+    "ServerComputerLockdownMixin"
   ],
   "injectors": {
     "defaultRequire": 1

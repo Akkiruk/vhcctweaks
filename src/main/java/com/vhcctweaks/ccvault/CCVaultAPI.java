@@ -248,12 +248,11 @@ public class CCVaultAPI implements ILuaAPI {
 
     /**
      * Get information about the current CCVault session.
-     * Includes player/host names, self-play detection, and rate limit budget.
+     * Includes player/host names, self-play detection, and auth state.
      * Does not require authentication.
      *
      * Lua: local info = ccvault.getSessionInfo()
      *      if info.isSelfPlay then print("Test mode!") end
-     *      print("Transfers left: " .. info.transfersRemaining)
      */
     @LuaFunction
     public final Object[] getSessionInfo() {
@@ -285,19 +284,6 @@ public class CCVaultAPI implements ILuaAPI {
         // Auth status
         boolean authenticated = player != null && SessionAuthManager.isAuthenticated(player.getUUID(), computerId);
         info.put("authenticated", authenticated);
-
-        // Rate limit budget
-        if (player != null) {
-            int terminalRemaining = RateLimiter.getRemainingTerminalTransfers(computerId);
-            int playerRemaining = RateLimiter.getRemainingPlayerTransfers(player.getUUID());
-            info.put("transfersRemaining", Math.min(terminalRemaining, playerRemaining));
-            info.put("terminalTransfersRemaining", terminalRemaining);
-            info.put("playerTransfersRemaining", playerRemaining);
-        } else {
-            info.put("transfersRemaining", 0);
-            info.put("terminalTransfersRemaining", 0);
-            info.put("playerTransfersRemaining", 0);
-        }
 
         return new Object[]{info};
     }

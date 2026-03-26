@@ -17,8 +17,6 @@ public class ModConfig {
     public static final ForgeConfigSpec.BooleanValue CCVAULT_ENABLED;
     public static final ForgeConfigSpec.IntValue CCVAULT_NONCE_EXPIRY_SECONDS;
     public static final ForgeConfigSpec.IntValue CCVAULT_SESSION_IDLE_TIMEOUT_MINUTES;
-    public static final ForgeConfigSpec.IntValue CCVAULT_MAX_TRANSFERS_PER_MIN_TERMINAL;
-    public static final ForgeConfigSpec.IntValue CCVAULT_MAX_TRANSFERS_PER_MIN_PLAYER;
     public static final ForgeConfigSpec.LongValue CCVAULT_MAX_TRANSFER_AMOUNT;
     public static final ForgeConfigSpec.IntValue CCVAULT_INTERACTION_STALE_SECONDS;
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_HISTORY_RESULTS;
@@ -63,12 +61,6 @@ public class ModConfig {
                 .comment("How long an approved CCVault terminal authorization stays valid without activity.",
                          "Authorization is also cleared immediately when the player disconnects.")
                 .defineInRange("sessionIdleTimeoutMinutes", 30, 1, 240);
-        CCVAULT_MAX_TRANSFERS_PER_MIN_TERMINAL = builder
-                .comment("Maximum transfers per minute per terminal.")
-                .defineInRange("maxTransfersPerMinTerminal", 10, 1, 100);
-        CCVAULT_MAX_TRANSFERS_PER_MIN_PLAYER = builder
-                .comment("Maximum transfers per minute per player.")
-                .defineInRange("maxTransfersPerMinPlayer", 20, 1, 200);
         CCVAULT_MAX_TRANSFER_AMOUNT = builder
                 .comment("Maximum tokens per single transfer.")
                 .defineInRange("maxTransferAmount", 1_000_000L, 1L, Long.MAX_VALUE);

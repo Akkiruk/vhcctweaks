@@ -131,12 +131,6 @@ public class TransferService {
             return TransferResult.fail("amount exceeds maximum (" + maxAmount + ")");
         }
 
-        // Check rate limits
-        String rateLimitMsg = RateLimiter.checkLimit(computerId, playerUuid);
-        if (rateLimitMsg != null) {
-            return TransferResult.fail(rateLimitMsg);
-        }
-
         // Check Dog API availability
         if (!DogBridge.isAvailable()) {
             return TransferResult.fail("economy system not available");
@@ -196,10 +190,9 @@ public class TransferService {
             deleteIntent(txId);
         }
 
-        // Step 6: Log to ledger and record rate limit
+        // Step 6: Log to ledger
         TransactionLedger.logTransfer(txId, fromUuid, toUuid, amount, reason, computerId,
                 playerUuid, hostUuid);
-        RateLimiter.recordTransfer(computerId, playerUuid);
 
         // Step 7: Delete WAL file (transfer complete)
         deleteIntent(txId);

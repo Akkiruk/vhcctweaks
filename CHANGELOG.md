@@ -6,6 +6,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 - No changes yet.
 
+## [2.2.7] - 2026-03-25
+
+### Changed
+- Removed CCVault transfer rate limits for players and computers.
 ## [2.2.6] - 2026-03-25
 
 ### Added

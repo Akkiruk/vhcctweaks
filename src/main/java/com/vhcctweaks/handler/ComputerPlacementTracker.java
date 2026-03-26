@@ -23,8 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tracks the permanent host owner for each CC:Tweaked computer ID.
- * Ownership is assigned on first interaction, which supports both
- * placed computers and pocket computers. Persists to
+ * Block computers can still assign an owner on first interaction, while
+ * pocket computers are expected to be claimed explicitly by trusted installer
+ * flows. Persists to
  * vhcc_data/ccvault/owners.json.
  */
 public class ComputerPlacementTracker {
@@ -73,7 +74,6 @@ public class ComputerPlacementTracker {
 
     /**
      * Set owner for a computer ID, only if it has no existing owner.
-     * Ownership is permanent and cannot be overwritten.
      * @return true if ownership was assigned, false if already owned
      */
     public static boolean setOwner(int computerId, UUID ownerUuid) {
@@ -81,6 +81,22 @@ public class ComputerPlacementTracker {
             return false;
         }
         computerOwners.put(computerId, ownerUuid);
+        save();
+        return true;
+    }
+
+    /**
+     * Force the owner for a computer ID to a specific player.
+     * Intended for trusted provisioning flows, such as installers which should
+     * bind a pocket computer to the person who set it up.
+     *
+     * @return true if the stored owner changed, false if it was already ownerUuid
+     */
+    public static boolean replaceOwner(int computerId, UUID ownerUuid) {
+        UUID previous = computerOwners.put(computerId, ownerUuid);
+        if (ownerUuid.equals(previous)) {
+            return false;
+        }
         save();
         return true;
     }

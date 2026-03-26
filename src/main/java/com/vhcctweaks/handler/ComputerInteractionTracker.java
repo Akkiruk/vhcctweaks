@@ -29,7 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * the tracker walks the multi-block monitor structure and finds the
  * adjacent computer to associate the interaction with. Pocket computers
  * are registered on item use and then refreshed while a computer menu
- * is open so long-lived sessions do not go stale mid-interaction.
+ * is open so long-lived sessions do not go stale mid-interaction, but
+ * their permanent host owner is claimed explicitly by installer flows.
  */
 public class ComputerInteractionTracker {
 
@@ -67,7 +68,7 @@ public class ComputerInteractionTracker {
                 computerId = findComputerAdjacentToMonitor(level, pos);
             }
 
-            recordInteraction(player, computerId);
+            recordInteraction(player, computerId, true);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing right-click: {}", e.getMessage());
         }
@@ -88,7 +89,7 @@ public class ComputerInteractionTracker {
                 computerId = pocketComputer.createServerComputer(level, player, player.getInventory(), stack).getID();
             }
 
-            recordInteraction(player, computerId);
+            recordInteraction(player, computerId, false);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing pocket use: {}", e.getMessage());
         }
@@ -101,7 +102,7 @@ public class ComputerInteractionTracker {
         if (!(player.containerMenu instanceof ContainerComputerBase menu)) return;
 
         try {
-            recordInteraction(player, menu.getComputer().getID());
+            recordInteraction(player, menu.getComputer().getID(), false);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error refreshing menu session: {}", e.getMessage());
         }
@@ -187,7 +188,7 @@ public class ComputerInteractionTracker {
         return computerToPlayer.get(computerId);
     }
 
-    private static void recordInteraction(ServerPlayer player, int computerId) {
+    private static void recordInteraction(ServerPlayer player, int computerId, boolean assignOwnerIfMissing) {
         if (computerId < 0) return;
 
         computerToPlayer.put(computerId, player.getUUID());
@@ -196,8 +197,8 @@ public class ComputerInteractionTracker {
         onlinePlayers.put(player.getUUID(), player);
         SessionAuthManager.touchSession(player.getUUID(), computerId);
 
-        // First interaction with an unowned computer assigns permanent owner.
-        if (ComputerPlacementTracker.getOwner(computerId) == null) {
+        // Block computers still claim ownership on first interaction.
+        if (assignOwnerIfMissing && ComputerPlacementTracker.getOwner(computerId) == null) {
             UUID hostUuid = player.getUUID();
             if (ComputerPlacementTracker.setOwner(computerId, hostUuid)) {
                 VHCCTweaks.LOGGER.info("CCVault: Computer {} assigned host {} on first interaction",

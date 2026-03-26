@@ -20,7 +20,7 @@ import java.util.UUID;
  *
  * Security model:
  * - Scripts can only reference "player" (interacting player) or "host" (computer owner).
- * - No raw UUID targeting. No add/remove/set. Only balanced transfers.
+ * - No raw UUID targeting. Only trusted local setup flows may claim host.
  * - Requires per-session authentication via clickable chat nonce.
  *
  * Lua usage:
@@ -31,13 +31,14 @@ import java.util.UUID;
  *   ccvault.transfer("player", "host", 100, "shop") -- balanced transfer
  *   ccvault.getPlayerName()                         -- interacting player's name
  *   ccvault.getHostName()                           -- computer owner's name
+ *   ccvault.claimHost()                             -- trusted installer/setup host claim
  *   ccvault.isAvailable()                           -- is the economy system loaded?
  */
 public class CCVaultAPI implements ILuaAPI {
 
     private static final int MAX_REASON_LENGTH = 64;
     private static final String OWNER_REGISTRATION_MESSAGE =
-            "computer has no registered owner - interact with it once to register";
+            "computer has no registered owner - run installer or interact with it once to register";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final int computerId;
@@ -209,6 +210,29 @@ public class CCVaultAPI implements ILuaAPI {
         }
         // Owner is offline — return UUID string as fallback
         return new Object[]{owner.toString()};
+    }
+
+    /**
+     * Claim this computer's host owner for the current interacting player.
+     * Intended for trusted installer/setup flows on pocket computers.
+     *
+     * Lua: local result, err = ccvault.claimHost()
+     *      if result then print(result.hostName, result.changed) end
+     */
+    @LuaFunction
+    public final Object[] claimHost() throws LuaException {
+        ServerPlayer player = getInteractingPlayerOrThrow();
+        UUID playerUuid = player.getUUID();
+        UUID previousOwner = ComputerPlacementTracker.getOwner(computerId);
+        boolean changed = ComputerPlacementTracker.replaceOwner(computerId, playerUuid);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("changed", changed);
+        response.put("hostName", player.getName().getString());
+        response.put("computerId", computerId);
+        response.put("previousHostUuid", previousOwner != null ? previousOwner.toString() : null);
+        return new Object[]{response};
     }
 
     /**

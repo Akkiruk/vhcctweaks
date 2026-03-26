@@ -6,66 +6,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$commonPath = Join-Path $PSScriptRoot "vhcctweaks-common.ps1"
+. $commonPath
 
-function Get-ModVersion {
-    param([string]$RepoRoot)
-
-    $propsPath = Join-Path $RepoRoot "gradle.properties"
-    $props = Get-Content $propsPath -Raw
-    if ($props -notmatch "mod_version=(\S+)") {
-        throw "Could not read mod_version from $propsPath"
-    }
-    return $Matches[1]
-}
-
-function Get-BuiltJar {
-    param(
-        [string]$RepoRoot,
-        [string]$Version
-    )
-
-    $expected = Join-Path $RepoRoot "build\libs\vhcctweaks-$Version.jar"
-    if (Test-Path $expected) {
-        return Get-Item $expected
-    }
-
-    $fallback = Get-ChildItem (Join-Path $RepoRoot "build\libs") -Filter "vhcctweaks-*.jar" -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
-
-    if (-not $fallback) {
-        throw "No built vhcctweaks JAR found under build/libs"
-    }
-
-    return $fallback
-}
-
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = Get-RepoRoot -ScriptRoot $PSScriptRoot
 $modsDir = Join-Path $env:APPDATA "PrismLauncher\instances\Vault Paradise\minecraft\mods"
 $instanceScriptsDir = Join-Path $env:APPDATA "PrismLauncher\instances\Vault Paradise\minecraft\scripts"
-$gradlew = Join-Path $repoRoot "gradlew.bat"
 $version = Get-ModVersion -RepoRoot $repoRoot
+$javaHome = Get-Java17Home
 
 Write-Host "Repo:    $repoRoot"
 Write-Host "Version: $version"
+Write-Host "Java 17: $javaHome"
 
 if (-not $SkipBuild) {
-    if (-not (Test-Path $gradlew)) {
-        throw "Gradle wrapper not found: $gradlew"
-    }
-
     if ($DryRun) {
-        Write-Host "[dry-run] Would run: .\gradlew.bat build" -ForegroundColor Yellow
+        Write-Host "[dry-run] Would run: .\gradlew.bat build under Java 17" -ForegroundColor Yellow
     } else {
-        Push-Location $repoRoot
-        try {
-            & $gradlew build
-            if ($LASTEXITCODE -ne 0) {
-                throw "Gradle build failed"
-            }
-        } finally {
-            Pop-Location
-        }
+        Invoke-GradleBuild -RepoRoot $repoRoot
+        $version = Get-ModVersion -RepoRoot $repoRoot
     }
 }
 

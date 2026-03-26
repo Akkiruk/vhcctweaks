@@ -2,6 +2,22 @@
 
 All notable changes to VH CC Tweaks are documented here.
 
+## [Unreleased]
+
+- No changes yet.
+
+## [2.2.6] - 2026-03-25
+
+### Added
+- Claimed pocket computer hosts during installer setup so deployed pocket workflows inherit the correct ownership state.
+
+### Changed
+- Added CCVault pocket-computer interaction tracking and related placement handling updates.
+- Automated patch-version bumps from tracked mod source changes so release numbering stays aligned with the shipped code.
+
+### Security
+- Added computer filesystem lockdown support.
+
 ## [2.2.4] - 2026-03-24
 
 ### Changed

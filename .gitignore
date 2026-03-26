@@ -6,6 +6,9 @@ build/
 .idea/
 *.iml
 .vscode/
+!.vscode/
+.vscode/*
+!.vscode/release.ps1
 *.launch
 .settings/
 .classpath

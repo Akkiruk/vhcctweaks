@@ -137,7 +137,7 @@ Full API reference: [`docs/CCVAULT_API.md`](docs/CCVAULT_API.md)
 
 ## Installation
 
-1. Download `vhcctweaks-2.2.4.jar` from the [Releases](../../releases) page
+1. Download `vhcctweaks-2.2.6.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
 3. Copy `scripts/ComputerCraft.zs` and `scripts/AdvancedPeripherals.zs` from this repo into your instance's `scripts/` folder
 4. Launch the game - all config patching happens automatically on first startup
@@ -181,7 +181,15 @@ Requires **JDK 17** and **Gradle 7.6+**.
 ./gradlew build
 ```
 
-Output: `build/libs/vhcctweaks-2.2.4.jar`
+Output: `build/libs/vhcctweaks-2.2.6.jar`
+
+## Maintainer Release Workflow
+
+1. Add release notes under `## [Unreleased]` in `CHANGELOG.md` as you work.
+2. Run `.\.vscode\release.ps1` from a clean `master` branch checkout that matches `origin/master`.
+3. The release script builds under Java 17, freezes `[Unreleased]` into the next versioned changelog section, updates README version references, deploys locally, pushes `master` and the new tag, and creates or updates the matching GitHub release.
+
+For quick local verification without cutting a GitHub release, use `.\scripts\build-and-deploy-vhcctweaks.ps1`.
 
 ## Project Structure
 

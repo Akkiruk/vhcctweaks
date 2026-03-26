@@ -3,14 +3,92 @@ plugins {
     id 'java'
 }
 
-version = mod_version
-group = mod_group
-archivesBaseName = mod_id
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+
+def gradlePropsFile = file('gradle.properties')
+def gradleProps = new Properties()
+gradlePropsFile.withInputStream { gradleProps.load(it) }
+
+def trackedFiles = files(
+    fileTree(dir: 'src/main/java', includes: ['**/*.java']),
+    fileTree(dir: 'src/main/resources', excludes: ['**/.cache/**']),
+    file('build.gradle'),
+    file('settings.gradle'),
+    file('gradle.properties')
+).files.findAll { it.exists() }.sort { a, b -> a.path <=> b.path }
+
+def normalizeTrackedFile = { File tracked ->
+    String text = tracked.getText('UTF-8')
+    if (tracked.name == 'gradle.properties') {
+        text = text
+            .readLines()
+            .findAll { line -> !(line ==~ /mod_version=.*/ || line ==~ /mod_source_hash=.*/) }
+            .join('\n')
+    }
+    return text.replace("\r\n", "\n")
+}
+
+def computeTrackedSourceHash = {
+    MessageDigest digest = MessageDigest.getInstance('SHA-256')
+    trackedFiles.each { tracked ->
+        digest.update(project.relativePath(tracked).replace('\\', '/').getBytes(StandardCharsets.UTF_8))
+        digest.update((byte) 0)
+        digest.update(normalizeTrackedFile(tracked).getBytes(StandardCharsets.UTF_8))
+        digest.update((byte) 0)
+    }
+    return digest.digest().encodeHex().toString().substring(0, 16)
+}
+
+def bumpPatchVersion = { String versionText ->
+    def parts = (versionText ?: '1.0.0').tokenize('.').collect { it as int }
+    while (parts.size() < 3) {
+        parts << 0
+    }
+    parts[2] = parts[2] + 1
+    return parts.take(3).join('.')
+}
+
+def writeGradleProperty = { String text, String key, String value ->
+    String normalized = text.replace("\r\n", "\n")
+    String line = "${key}=${value}"
+    String pattern = '(?m)^' + java.util.regex.Pattern.quote(key) + '=.*$'
+    if ((normalized =~ pattern).find()) {
+        normalized = normalized.replaceFirst(pattern, java.util.regex.Matcher.quoteReplacement(line))
+    } else {
+        normalized = normalized.trim() + "\n" + line + "\n"
+    }
+    return normalized
+}
+
+def persistedSourceHash = gradleProps.getProperty('mod_source_hash', '')
+def resolvedModVersion = gradleProps.getProperty('mod_version', '1.0.0')
+def resolvedModGroup = gradleProps.getProperty('mod_group')
+def resolvedModId = gradleProps.getProperty('mod_id')
+def resolvedSourceHash = computeTrackedSourceHash()
+
+if (persistedSourceHash != resolvedSourceHash) {
+    resolvedModVersion = bumpPatchVersion(resolvedModVersion)
+
+    String propsText = gradlePropsFile.getText('UTF-8')
+    propsText = writeGradleProperty(propsText, 'mod_version', resolvedModVersion)
+    propsText = writeGradleProperty(propsText, 'mod_source_hash', resolvedSourceHash)
+    gradlePropsFile.write(propsText.replace("\n", System.lineSeparator()), 'UTF-8')
+
+    gradleProps.setProperty('mod_version', resolvedModVersion)
+    gradleProps.setProperty('mod_source_hash', resolvedSourceHash)
+
+    logger.lifecycle("Auto-bumped vhcctweaks version to ${resolvedModVersion} (source hash ${resolvedSourceHash})")
+}
+
+version = resolvedModVersion
+group = resolvedModGroup
+archivesBaseName = resolvedModId
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 minecraft {
-    mappings channel: mappings_channel, version: mappings_version
+    mappings channel: gradleProps.getProperty('mappings_channel'), version: gradleProps.getProperty('mappings_version')
 
     runs {
         server {
@@ -34,10 +112,10 @@ repositories {
 }
 
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    minecraft "net.minecraftforge:forge:${gradleProps.getProperty('minecraft_version')}-${gradleProps.getProperty('forge_version')}"
 
     // CC:Tweaked API (compile-only, it's already in the modpack at runtime)
-    compileOnly "org.squiddev:cc-tweaked-${minecraft_version}:${cc_version}"
+    compileOnly "org.squiddev:cc-tweaked-${gradleProps.getProperty('minecraft_version')}:${gradleProps.getProperty('cc_version')}"
 
     // Advanced Peripherals (compile-only, for Mixin targets — downloaded in CI from Modrinth)
     compileOnly files("libs/AdvancedPeripherals-1.18.2-0.7.31r.jar")
@@ -101,10 +179,10 @@ tasks.named('check').configure {
 jar {
     manifest {
         attributes([
-            "Specification-Title"   : mod_id,
+            "Specification-Title"   : resolvedModId,
             "Specification-Version" : "1",
             "Implementation-Title"  : project.name,
-            "Implementation-Version": mod_version,
+            "Implementation-Version": resolvedModVersion,
             "MixinConfigs"          : "vhcctweaks.mixins.json",
         ])
     }

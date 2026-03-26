@@ -21,22 +21,22 @@ applyTo: '**'
 
 Releases are fully automated via GitHub Actions + a local PowerShell script.
 
-### Every Change = Release
+### Formal Releases
 
-**Every code change must go through the full release pipeline.** There are no "dev builds" or bare pushes without a version bump. Use the VS Code task **"Release New Version"** or run manually:
+Use the VS Code task **"Release New Version"** or run manually:
 
 ```powershell
-.\.vscode\release.ps1 -Version "2.2.0"
+.\.vscode\release.ps1
 ```
 
 This single command handles everything:
 1. Validates clean working tree and correct branch
-2. Bumps version in `gradle.properties`
-3. Adds changelog section to `CHANGELOG.md`
+2. Builds the JAR, auto-bumping `mod_version` in `gradle.properties` when tracked mod source changes require a new patch version
+3. Freezes `CHANGELOG.md`'s `[Unreleased]` notes into the new versioned section
 4. Updates version references in `README.md`
-5. Builds the JAR with Gradle
-6. Deploys to local Minecraft instance
-7. Commits, tags (`vX.Y.Z`), and pushes
+5. Deploys to local Minecraft instance
+6. Commits, tags (`vX.Y.Z`), and pushes
+7. Lets `release.yml` publish the GitHub Release from the pushed tag
 
 The `release.yml` GitHub Action then automatically creates a GitHub Release with the JAR attached.
 

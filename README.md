@@ -187,7 +187,8 @@ Output: `build/libs/vhcctweaks-2.2.6.jar`
 
 1. Add release notes under `## [Unreleased]` in `CHANGELOG.md` as you work.
 2. Run `.\.vscode\release.ps1` from a clean `master` branch checkout that matches `origin/master`.
-3. The release script builds under Java 17, freezes `[Unreleased]` into the next versioned changelog section, updates README version references, deploys locally, pushes `master` and the new tag, and creates or updates the matching GitHub release.
+3. The release script builds under Java 17, freezes `[Unreleased]` into the next versioned changelog section, updates README version references, deploys locally, and pushes `master` plus the new `vX.Y.Z` tag.
+4. Pushing that tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which creates or updates the matching GitHub Release and attaches the built JAR automatically.
 
 For quick local verification without cutting a GitHub release, use `.\scripts\build-and-deploy-vhcctweaks.ps1`.
 

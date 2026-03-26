@@ -67,12 +67,27 @@ function Set-Utf8NoBomContent {
     [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Get-JavaVersionLine {
+    param([string]$JavaExe)
+
+    if (-not (Test-Path $JavaExe)) {
+        return $null
+    }
+
+    $output = cmd /d /c ('"{0}" -version 2>&1' -f $JavaExe)
+    if ($LASTEXITCODE -ne 0 -or -not $output) {
+        return $null
+    }
+
+    return ($output | Select-Object -First 1).ToString()
+}
+
 function Get-Java17Home {
     $currentJavaHome = $env:JAVA_HOME
     if ($currentJavaHome) {
         $currentJavaExe = Join-Path $currentJavaHome "bin\java.exe"
         if (Test-Path $currentJavaExe) {
-            $versionLine = (& $currentJavaExe -version 2>&1 | Select-Object -First 1)
+            $versionLine = Get-JavaVersionLine -JavaExe $currentJavaExe
             if ($versionLine -match 'version "17\.') {
                 return $currentJavaHome
             }

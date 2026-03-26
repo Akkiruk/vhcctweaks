@@ -21,6 +21,22 @@ function Invoke-Git {
     }
 }
 
+function Get-GitHubRepoSlug {
+    param([string]$RemoteName = 'origin')
+
+    $remoteUrl = (git remote get-url $RemoteName 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $remoteUrl) {
+        return $null
+    }
+
+    $match = [regex]::Match($remoteUrl.Trim(), 'github\.com[:/](?<slug>[^/]+/[^/.]+?)(?:\.git)?$')
+    if ($match.Success) {
+        return $match.Groups['slug'].Value
+    }
+
+    return $null
+}
+
 function Get-ReleaseNotes {
     param(
         [string]$ChangelogPath,
@@ -131,22 +147,20 @@ try {
         throw "Release script requires master to match origin/master exactly."
     }
 
-    if (-not $SkipGitHubRelease -and -not $DryRun) {
-        & gh auth status | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "GitHub CLI is not authenticated. Run 'gh auth login' before releasing."
-        }
+    if ($SkipGitHubRelease) {
+        Write-Warning "-SkipGitHubRelease is deprecated. Pushing a release tag now always hands off GitHub release publishing to GitHub Actions."
     }
 
     $startingVersion = Get-ModVersion -RepoRoot $RepoRoot
     $releaseNotes = Get-ReleaseNotes -ChangelogPath $changelogPath -InlineEntry $ChangelogEntry -EntryFile $ChangelogFile
     $javaHome = Get-Java17Home
+    $repoSlug = Get-GitHubRepoSlug
 
     if ($DryRun) {
         Write-Host "[dry-run] Would build under Java 17 at $javaHome" -ForegroundColor Yellow
         Write-Host "[dry-run] Starting version: $startingVersion" -ForegroundColor Yellow
         Write-Host "[dry-run] Would freeze [Unreleased] into the next release section" -ForegroundColor Yellow
-        Write-Host "[dry-run] Would commit, tag, push, and create/update the GitHub release" -ForegroundColor Yellow
+        Write-Host "[dry-run] Would commit, tag, push, and let GitHub Actions publish the GitHub release" -ForegroundColor Yellow
         return
     }
 
@@ -189,34 +203,12 @@ try {
     Invoke-Git -Arguments @('push', 'origin', 'master')
     Invoke-Git -Arguments @('push', 'origin', $tag)
 
-    if (-not $SkipGitHubRelease) {
-        Write-Host "[6/6] Publishing GitHub release..." -ForegroundColor White
-        $notesPath = Join-Path $env:TEMP "vhcctweaks-$version-release-notes.md"
-        Set-Utf8NoBomContent -Path $notesPath -Content $releaseNotes.Trim()
-
-        try {
-            & gh release view $tag 1>$null 2>$null
-            $createRelease = ($LASTEXITCODE -ne 0)
-
-            if ($createRelease) {
-                & gh release create $tag $jar.FullName --title "VH CC Tweaks $tag" --notes-file $notesPath
-            } else {
-                & gh release edit $tag --title "VH CC Tweaks $tag" --notes-file $notesPath
-                if ($LASTEXITCODE -ne 0) {
-                    throw "gh release edit $tag failed"
-                }
-
-                & gh release upload $tag $jar.FullName --clobber
-            }
-
-            if ($LASTEXITCODE -ne 0) {
-                throw "GitHub release publish failed"
-            }
-        } finally {
-            Remove-Item $notesPath -ErrorAction SilentlyContinue
-        }
+    Write-Host "[6/6] Handing off GitHub release publishing to GitHub Actions..." -ForegroundColor White
+    if ($repoSlug) {
+        Write-Host "  Workflow: https://github.com/$repoSlug/actions/workflows/release.yml" -ForegroundColor Gray
+        Write-Host "  Release:  https://github.com/$repoSlug/releases/tag/$tag" -ForegroundColor Gray
     } else {
-        Write-Host "[6/6] Skipping GitHub release (--SkipGitHubRelease)" -ForegroundColor Yellow
+        Write-Host "  GitHub Actions 'release.yml' will create or update the GitHub release for $tag." -ForegroundColor Gray
     }
 
     Write-Host "`n=== Release $tag complete! ===" -ForegroundColor Cyan

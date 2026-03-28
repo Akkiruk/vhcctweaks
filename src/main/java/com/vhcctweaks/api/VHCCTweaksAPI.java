@@ -56,7 +56,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
 
     /**
      * Validate path segments without resolving against a root directory.
-     * Used by both server-side resolve() and client-write functions.
+     * Used by sandboxed vhcc filesystem operations before root resolution.
      */
     static void validatePath(String path) throws LuaException {
         if (path == null || path.isEmpty()) {

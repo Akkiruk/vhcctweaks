@@ -29,7 +29,7 @@ AP Config Patches:
 
 Custom Lua API:
 - Sandboxed filesystem API (vhcc) on all CC computers
-- Server-side and client-side file operations
+- Server-side sandboxed file operations
 - Strict path validation and write limits
 '''
 

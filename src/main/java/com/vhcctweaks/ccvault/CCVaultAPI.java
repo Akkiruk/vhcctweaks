@@ -21,7 +21,7 @@ import java.util.UUID;
  * Security model:
  * - Scripts can only reference "player" (interacting player) or "host" (computer owner).
  * - No raw UUID targeting. Only trusted local setup flows may claim host.
- * - Requires per-session authentication via clickable chat nonce.
+ * - Requires server-side authentication via clickable chat nonce.
  *
  * Lua usage:
  *   ccvault.requestAuth()                           -- sends auth prompt to player
@@ -68,25 +68,24 @@ public class CCVaultAPI implements ILuaAPI {
     /**
      * Request authentication for the current interacting player.
      * Sends a clickable chat message to the player. They must click [APPROVE].
-     * Auth is per-session (clears on disconnect).
+     * Auth is tracked server-side by computer ID.
      *
      * Lua: local ok, err = ccvault.requestAuth()
-     * Returns: true if sent, or nil + error message
+     * Returns: true if sent or already authenticated, or nil + error message
      */
     @LuaFunction
     public final Object[] requestAuth() throws LuaException {
         ServerPlayer player = getInteractingPlayerOrThrow();
-        String nonce = SessionAuthManager.requestAuth(player, computerId);
-        if (nonce != null) {
-            return new Object[]{true};
-        } else {
-            // Already has a pending request — tell the script so it can wait
-            return new Object[]{null, "auth request already pending — check your chat"};
-        }
+        SessionAuthManager.RequestAuthResult result = SessionAuthManager.requestAuth(player, computerId);
+        return switch (result) {
+            case SENT -> new Object[]{true};
+            case ALREADY_AUTHENTICATED -> new Object[]{true, "already authenticated"};
+            case PENDING -> new Object[]{null, "auth request already pending — check your chat"};
+        };
     }
 
     /**
-     * Check if the current interacting player has authenticated this session.
+     * Check if the current interacting player has authenticated this computer.
      * Lua: if ccvault.isAuthenticated() then ... end
      */
     @LuaFunction

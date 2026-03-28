@@ -120,6 +120,7 @@ A server-authoritative economy API that lets CC:Tweaked computers move **Vault T
 
 **Key features:**
 - **Click-to-approve authentication** - server sends an unforgeable `[APPROVE]` chat message; scripts cannot fake it
+- **Server-owned auth grants** - approvals are stored by computer ID in the mod for up to 30 real-time minutes and expire after 10 minutes idle
 - **Rate limiting** - per-terminal (10/min) and per-player (20/min) caps prevent abuse
 - **Crash-safe transfers** - Write-Ahead Log ensures incomplete transfers auto-recover on restart
 - **Double-entry ledger** - all transactions are permanently recorded
@@ -137,7 +138,7 @@ Full API reference: [`docs/CCVAULT_API.md`](docs/CCVAULT_API.md)
 
 ## Installation
 
-1. Download `vhcctweaks-2.2.7.jar` from the [Releases](../../releases) page
+1. Download `vhcctweaks-2.2.8.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
 3. Copy `scripts/ComputerCraft.zs` and `scripts/AdvancedPeripherals.zs` from this repo into your instance's `scripts/` folder
 4. Launch the game - all config patching happens automatically on first startup
@@ -156,6 +157,10 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 | `vault.vaultDimension` | `the_vault:vault` | Resource location of the Vault dimension |
 | `autocrafting.lockCraftyTurtles` | `true` | Gate crafting turtles behind VH research |
 | `autocrafting.autocraftingResearchName` | `Automatic Genius` | Which VH research unlocks autocrafting |
+| `ccvault.authMaxLifetimeMinutes` | `30` | Maximum real-time lifetime for a CCVault approval on a computer |
+| `ccvault.authIdleTimeoutMinutes` | `10` | Inactivity timeout before a CCVault approval expires |
+| `ccvault.nonceExpirySeconds` | `60` | How long the clickable approval prompt stays valid |
+| `ccvault.interactionStaleSeconds` | `30` | How recent player interaction must be for financial operations |
 
 ## Testing
 
@@ -181,7 +186,7 @@ Requires **JDK 17** and **Gradle 7.6+**.
 ./gradlew build
 ```
 
-Output: `build/libs/vhcctweaks-2.2.7.jar`
+Output: `build/libs/vhcctweaks-2.2.8.jar`
 
 ## Maintainer Release Workflow
 

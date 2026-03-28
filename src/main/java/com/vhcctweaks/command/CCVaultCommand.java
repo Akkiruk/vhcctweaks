@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.vhcctweaks.ccvault.SessionAuthManager;
+import com.vhcctweaks.config.ModConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -42,9 +43,13 @@ public class CCVaultCommand {
 
     private static int handleApprove(ServerPlayer player, String nonce) {
         if (SessionAuthManager.approveNonce(player.getUUID(), nonce)) {
+            int lifetimeMinutes = ModConfig.CCVAULT_AUTH_MAX_LIFETIME_MINUTES.get();
+            int idleMinutes = ModConfig.CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES.get();
             player.sendMessage(
                     new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
-                            .append(new TextComponent("Terminal authorized for this session.").withStyle(ChatFormatting.GREEN)),
+                            .append(new TextComponent("Terminal authorized for up to " + lifetimeMinutes
+                                    + " minutes and expires after " + idleMinutes + " minutes idle.")
+                                    .withStyle(ChatFormatting.GREEN)),
                     player.getUUID());
             return 1;
         } else {

@@ -44,7 +44,7 @@ public class VHCCTweaks {
         MinecraftForge.EVENT_BUS.register(ComputerInteractionTracker.class);
         // Track which player owns each CC computer (host UUID for CCVault)
         MinecraftForge.EVENT_BUS.register(ComputerPlacementTracker.class);
-        // Session auth cleanup on player disconnect
+        // Track CCVault auth grants and approval prompts
         MinecraftForge.EVENT_BUS.register(SessionAuthManager.class);
         // Command registration and server start events
         MinecraftForge.EVENT_BUS.register(VHCCTweaks.class);
@@ -63,6 +63,7 @@ public class VHCCTweaks {
         ComputerCraftAPI.registerAPIFactory(computer -> new VHCCTweaksAPI(computer.getID()));
 
         // CCVault economy system init
+        SessionAuthManager.init(dataDir);
         ComputerPlacementTracker.init(dataDir);
         TransactionLedger.init(dataDir);
         TransferService.init(dataDir);

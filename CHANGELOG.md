@@ -4,7 +4,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+### Changed
+- Moved CCVault terminal authorization fully into `VHCCTweaks` with server-side persistence keyed by computer ID.
+- Approved CCVault auth now lasts up to 30 real-time minutes and expires after 10 minutes of inactivity instead of clearing immediately on logout.
+- `ccvault.requestAuth()` now treats an already-valid grant as success instead of forcing a fresh approval prompt.
 
 ## [2.2.7] - 2026-03-25
 

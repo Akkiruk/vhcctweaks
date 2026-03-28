@@ -21,6 +21,8 @@
 - That helper forces a Java 17 toolchain locally, builds with `gradlew.bat build`, copies the latest `vhcctweaks-*.jar` into the runtime `mods/` folder, and copies `scripts/*.zs` into the runtime `scripts/` folder.
 - Build output lives at `build/libs/vhcctweaks-<mod_version>.jar`.
 - Use `.vscode/release.ps1` for the formal tagged release flow. It freezes `CHANGELOG.md`'s `[Unreleased]` notes into the next versioned section, updates README version references, pushes the tag, and creates or updates the GitHub release.
+- Do not describe a change as "released" unless `.vscode/release.ps1` completed successfully.
+- `scripts/build-and-deploy-vhcctweaks.ps1` and `scripts/push-all.ps1` are not release workflows. They produce deployed or pushed changes only.
 - Keep `CHANGELOG.md`'s `[Unreleased]` section current while developing so release notes stay accurate.
 
 ## Coding Conventions

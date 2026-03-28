@@ -57,7 +57,7 @@ public class BalanceNotifier {
                 .append(new TextComponent(" | " + reason).withStyle(ChatFormatting.GRAY))
                 .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
 
-        player.sendMessage(msg, player.getUUID());
+        PlayerMessageQueue.send(player, msg);
     }
 
     /**
@@ -79,7 +79,7 @@ public class BalanceNotifier {
                 .append(new TextComponent(" | " + reason).withStyle(ChatFormatting.GRAY))
                 .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
 
-        player.sendMessage(msg, player.getUUID());
+        PlayerMessageQueue.send(player, msg);
     }
 
     /**
@@ -101,7 +101,7 @@ public class BalanceNotifier {
                 .append(new TextComponent(description).withStyle(ChatFormatting.YELLOW))
                 .append(new TextComponent(fmtBal(balance)).withStyle(ChatFormatting.DARK_GRAY));
 
-        player.sendMessage(msg, player.getUUID());
+        PlayerMessageQueue.send(player, msg);
     }
 
     private static ServerPlayer getPlayer(UUID uuid) {

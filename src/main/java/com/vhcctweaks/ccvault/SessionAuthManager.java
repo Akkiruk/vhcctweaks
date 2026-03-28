@@ -141,7 +141,7 @@ public class SessionAuthManager {
                                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                                         new TextComponent("Click to authorize this terminal")))));
 
-        player.sendMessage(msg, player.getUUID());
+        PlayerMessageQueue.send(player, msg);
 
         VHCCTweaks.LOGGER.debug("CCVault: Auth nonce sent to {} for computer {}", player.getName().getString(), computerId);
         return RequestAuthResult.SENT;

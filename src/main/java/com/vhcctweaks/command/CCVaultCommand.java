@@ -43,12 +43,11 @@ public class CCVaultCommand {
 
     private static int handleApprove(ServerPlayer player, String nonce) {
         if (SessionAuthManager.approveNonce(player.getUUID(), nonce)) {
-            int lifetimeMinutes = ModConfig.CCVAULT_AUTH_MAX_LIFETIME_MINUTES.get();
             int idleMinutes = ModConfig.CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES.get();
             player.sendMessage(
                     new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
-                            .append(new TextComponent("Terminal authorized for up to " + lifetimeMinutes
-                                    + " minutes and expires after " + idleMinutes + " minutes idle.")
+                            .append(new TextComponent("Terminal authorized until you disconnect or go "
+                                    + idleMinutes + " minutes idle.")
                                     .withStyle(ChatFormatting.GREEN)),
                     player.getUUID());
             return 1;

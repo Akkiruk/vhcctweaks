@@ -11,8 +11,8 @@
 --    * You CANNOT create or destroy tokens. Every debit has an equal credit.
 --    * The only two identities you can reference are "player" and "host".
 --    * All money operations require the player to authenticate first.
---    * Auth is stored in the mod by computer ID, not in your Lua code.
---    * Auth lasts up to 30 real-time minutes and expires after 10 minutes idle.
+--    * Auth is handled by the mod, not by your Lua code.
+--    * Auth lasts until disconnect or 10 minutes of inactivity.
 --
 --  "player" = the person currently interacting with / using the computer
 --  "host"   = the person who first registered the computer
@@ -38,7 +38,7 @@ end
 -- ============================================================================
 
 -- A player must approve your terminal before you can touch their wallet.
--- The approval is tracked by the mod for this computer ID, not by your Lua script.
+-- The approval is tracked by the mod for this player/computer session.
 --
 -- When you call requestAuth(), the SERVER sends the player a clickable chat
 -- message that looks like:
@@ -46,8 +46,7 @@ end
 --   [CCVault] Computer #5 is requesting access to your wallet. [APPROVE]
 --
 -- This message is impossible for your script to fake. The player clicks
--- [APPROVE] and the server stores a grant for this computer for up to
--- 30 real-time minutes, with a 10-minute inactivity timeout.
+-- [APPROVE] and stays authorized until they disconnect or go 10 minutes idle.
 --
 -- IMPORTANT: The player must have interacted with your computer FIRST.
 -- If nobody has interacted with the computer, requestAuth() will error.

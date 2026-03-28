@@ -4,7 +4,9 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+### Changed
+- Rolled CCVault authorization back to a session-style grant that clears on disconnect or after 10 minutes of inactivity.
+- Removed the 30-minute max-lifetime model and disk-backed auth session persistence.
 
 ## [2.2.8] - 2026-03-27
 

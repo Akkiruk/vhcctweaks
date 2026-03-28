@@ -68,7 +68,7 @@ public class CCVaultAPI implements ILuaAPI {
     /**
      * Request authentication for the current interacting player.
      * Sends a clickable chat message to the player. They must click [APPROVE].
-     * Auth is tracked server-side by computer ID.
+     * Auth is tracked server-side for the player/computer session.
      *
      * Lua: local ok, err = ccvault.requestAuth()
      * Returns: true if sent or already authenticated, or nil + error message

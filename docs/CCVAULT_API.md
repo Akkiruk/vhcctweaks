@@ -55,8 +55,8 @@ end
 
    > **[CCVault]** Computer #5 is requesting access to your wallet. **[APPROVE]**
 
-4. Player clicks **[APPROVE]** → the mod stores an auth grant for that computer ID
-5. Auth lasts up to **30 real-time minutes** and expires after **10 minutes of inactivity**
+4. Player clicks **[APPROVE]** → the mod authorizes that player on that computer
+5. Auth lasts until the player disconnects or goes **10 minutes** without activity
 
 ⚠️ **This chat message cannot be faked by scripts.** It's sent directly by the server mod.
 
@@ -81,9 +81,9 @@ Returns `true` if Dog's PlayerShops is loaded and the economy system is active.
 | `ccvault.requestAuth()` | `true` \| `nil, error` | No |
 | `ccvault.isAuthenticated()` | `boolean` | No |
 
-**`requestAuth()`** sends the clickable approval message to the player's chat. If the current player already has a valid grant on this computer, it succeeds without sending a fresh prompt. Throws if no player is currently interacting with the computer yet.
+**`requestAuth()`** sends the clickable approval message to the player's chat. If the current player is already authorized on this computer, it succeeds without sending a fresh prompt. Throws if no player is currently interacting with the computer yet.
 
-**`isAuthenticated()`** returns whether the current interacting player has an active server-side grant for this terminal.
+**`isAuthenticated()`** returns whether the current interacting player has an active auth session for this terminal.
 
 ---
 

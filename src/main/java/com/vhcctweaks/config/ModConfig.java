@@ -16,7 +16,6 @@ public class ModConfig {
     // CCVault economy
     public static final ForgeConfigSpec.BooleanValue CCVAULT_ENABLED;
     public static final ForgeConfigSpec.IntValue CCVAULT_NONCE_EXPIRY_SECONDS;
-    public static final ForgeConfigSpec.IntValue CCVAULT_AUTH_MAX_LIFETIME_MINUTES;
     public static final ForgeConfigSpec.IntValue CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES;
     public static final ForgeConfigSpec.LongValue CCVAULT_MAX_TRANSFER_AMOUNT;
     public static final ForgeConfigSpec.IntValue CCVAULT_INTERACTION_STALE_SECONDS;
@@ -58,13 +57,9 @@ public class ModConfig {
         CCVAULT_NONCE_EXPIRY_SECONDS = builder
                 .comment("How long (in seconds) an auth approval nonce stays valid before expiring.")
                 .defineInRange("nonceExpirySeconds", 60, 10, 300);
-        CCVAULT_AUTH_MAX_LIFETIME_MINUTES = builder
-                .comment("Maximum real-time lifetime for an approved CCVault terminal authorization.",
-                         "Grants are tracked server-side by computer ID and can survive logout/restart until this limit is hit.")
-                .defineInRange("authMaxLifetimeMinutes", 30, 1, 240);
         CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES = builder
                 .comment("How long an approved CCVault terminal authorization survives without activity.",
-                         "If the authenticated player stops interacting with the computer, the grant expires after this many minutes.")
+                         "Authorization is also cleared immediately when the player disconnects.")
                 .defineInRange("authIdleTimeoutMinutes", 10, 1, 240);
         CCVAULT_MAX_TRANSFER_AMOUNT = builder
                 .comment("Maximum tokens per single transfer.")

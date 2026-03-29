@@ -68,6 +68,40 @@ function Get-ReleaseNotes {
     return $match.Groups['body'].Value.Trim()
 }
 
+function Test-OnlyAutoVersionBumpChange {
+    $dirtyEntries = @(git status --porcelain=v1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "git status --porcelain=v1 failed"
+    }
+
+    $dirtyEntries = @($dirtyEntries | Where-Object { $_.Trim() })
+    if ($dirtyEntries.Count -ne 1 -or $dirtyEntries[0] -notmatch '^.M gradle\.properties$|^M. gradle\.properties$') {
+        return $false
+    }
+
+    $diffLines = @(git diff --unified=0 -- gradle.properties)
+    if ($LASTEXITCODE -ne 0) {
+        throw "git diff --unified=0 -- gradle.properties failed"
+    }
+
+    $changedPropertyLines = @(
+        $diffLines |
+            Where-Object { $_ -match '^[+-]' -and $_ -notmatch '^\+\+\+' -and $_ -notmatch '^---' }
+    )
+
+    if (-not $changedPropertyLines) {
+        return $false
+    }
+
+    foreach ($line in $changedPropertyLines) {
+        if ($line -notmatch '^[+-]mod_(version|source_hash)=') {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Update-ChangelogForRelease {
     param(
         [string]$ChangelogPath,
@@ -133,7 +167,11 @@ try {
 
     $dirty = git status --porcelain
     if ($dirty) {
-        throw "Working tree is dirty. Commit or stash changes first."
+        if (Test-OnlyAutoVersionBumpChange) {
+            Write-Warning "Working tree contains only the build-generated gradle.properties version/hash bump; continuing with release."
+        } else {
+            throw "Working tree is dirty. Commit or stash changes first."
+        }
     }
 
     $branch = git rev-parse --abbrev-ref HEAD

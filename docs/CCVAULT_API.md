@@ -92,6 +92,7 @@ Returns `true` if Dog's PlayerShops is loaded and the economy system is active.
 | Function | Returns | Auth Required |
 |----------|---------|:---:|
 | `ccvault.getBalance(target)` | `number` \| `nil, error` | **Yes** |
+| `ccvault.getPlayerBalance(playerName)` | `number` \| `nil, error` | No |
 
 `target` must be `"player"` or `"host"`.
 
@@ -99,6 +100,15 @@ Returns `true` if Dog's PlayerShops is loaded and the economy system is active.
 local bal, err = ccvault.getBalance("player")
 if bal then
     print(bal .. " tokens")
+end
+```
+
+`getPlayerBalance(playerName)` is read-only and resolves any known player by username without requiring terminal auth. It can inspect balances, but it cannot move tokens or modify any wallet state.
+
+```lua
+local bal, err = ccvault.getPlayerBalance("Akkiruk")
+if bal then
+    print("Akkiruk has " .. bal .. " tokens")
 end
 ```
 

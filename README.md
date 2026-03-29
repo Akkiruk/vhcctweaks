@@ -121,6 +121,7 @@ A server-authoritative economy API that lets CC:Tweaked computers move **Vault T
 **Key features:**
 - **Click-to-approve authentication** - server sends an unforgeable `[APPROVE]` chat message; scripts cannot fake it
 - **Session-style auth grants** - approvals stay active for a player/computer pair until disconnect or 10 minutes idle
+- **Read-only public balance checks** - scripts can inspect any known player's current balance without auth, while transfers remain auth-gated
 - **Rate limiting** - per-terminal (10/min) and per-player (20/min) caps prevent abuse
 - **Crash-safe transfers** - Write-Ahead Log ensures incomplete transfers auto-recover on restart
 - **Double-entry ledger** - all transactions are permanently recorded

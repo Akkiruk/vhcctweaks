@@ -1,5 +1,6 @@
 package com.vhcctweaks.ccvault;
 
+import com.mojang.authlib.GameProfile;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
@@ -13,6 +14,7 @@ import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -28,6 +30,7 @@ import java.util.UUID;
  *   ccvault.isAuthenticated()                       -- check if session is active
  *   ccvault.getBalance("player")                    -- interacting player's balance
  *   ccvault.getBalance("host")                      -- computer owner's balance
+ *   ccvault.getPlayerBalance("SomePlayer")          -- any player's current balance (read-only)
  *   ccvault.transfer("player", "host", 100, "shop") -- balanced transfer
  *   ccvault.getPlayerName()                         -- interacting player's name
  *   ccvault.getHostName()                           -- computer owner's name
@@ -109,6 +112,31 @@ public class CCVaultAPI implements ILuaAPI {
         requireAuth();
         UUID uuid = resolveTarget(target);
         long balance = DogBridge.getBalance(uuid);
+        if (balance < 0) {
+            return new Object[]{null, "could not read balance"};
+        }
+        return new Object[]{balance};
+    }
+
+    /**
+     * Get the current token balance for any known player by username.
+     * Read-only: does not require authentication and cannot change balances.
+     *
+     * Lua: local bal, err = ccvault.getPlayerBalance("SomePlayer")
+     */
+    @LuaFunction
+    public final Object[] getPlayerBalance(String playerName) {
+        if (playerName == null || playerName.isBlank()) {
+            return new Object[]{null, "playerName is required"};
+        }
+
+        String normalizedPlayerName = playerName.trim();
+        UUID playerUuid = resolvePlayerUuidByName(normalizedPlayerName);
+        if (playerUuid == null) {
+            return new Object[]{null, "unknown player '" + normalizedPlayerName + "'"};
+        }
+
+        long balance = DogBridge.getBalance(playerUuid);
         if (balance < 0) {
             return new Object[]{null, "could not read balance"};
         }
@@ -457,5 +485,18 @@ public class CCVaultAPI implements ILuaAPI {
         var server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return null;
         return server.getPlayerList().getPlayer(uuid);
+    }
+
+    private UUID resolvePlayerUuidByName(String playerName) {
+        var server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return null;
+
+        ServerPlayer onlinePlayer = server.getPlayerList().getPlayerByName(playerName);
+        if (onlinePlayer != null) {
+            return onlinePlayer.getUUID();
+        }
+
+        Optional<GameProfile> cachedProfile = server.getProfileCache().get(playerName);
+        return cachedProfile.map(GameProfile::getId).orElse(null);
     }
 }

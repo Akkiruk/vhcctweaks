@@ -6,7 +6,6 @@ All notable changes to VH CC Tweaks are documented here.
 
 ### Added
 - Added `ccvault.getPlayerBalance(playerName)` for read-only balance checks on any known player without requiring terminal authorization.
-- Added a client-side `/market` browser that crawls PlayerShops listings into an item-first universal market view while leaving the original `/shop` flow unchanged.
 
 ## [2.2.10] - 2026-03-29
 

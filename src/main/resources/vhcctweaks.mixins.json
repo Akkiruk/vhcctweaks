@@ -10,10 +10,6 @@
     "RecipeResolverMixin",
     "ServerComputerLockdownMixin"
   ],
-  "client": [
-    "client.playershops.ShopBrowserScreenAccessor",
-    "client.playershops.BuyerShopScreenAccessor"
-  ],
   "injectors": {
     "defaultRequire": 1
   },

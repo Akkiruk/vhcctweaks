@@ -17,9 +17,10 @@
 
 ## Build And Deploy
 
-- Use `scripts/build-and-deploy-vhcctweaks.ps1` for ordinary local changes.
+- Use `scripts/build-and-deploy-vhcctweaks.ps1` only for intermediate local validation before the final release step.
 - That helper forces a Java 17 toolchain locally, builds with `gradlew.bat build`, copies the latest `vhcctweaks-*.jar` into the runtime `mods/` folder, and copies `scripts/*.zs` into the runtime `scripts/` folder.
 - Build output lives at `build/libs/vhcctweaks-<mod_version>.jar`.
+- After any change in this repo that should be kept, always finish by running `.vscode/release.ps1` so the change is built, deployed, committed, tagged, pushed, and published as the next GitHub release.
 - Use `.vscode/release.ps1` for the formal tagged release flow. It freezes `CHANGELOG.md`'s `[Unreleased]` notes into the next versioned section, updates README version references, pushes the tag, and creates or updates the GitHub release.
 - Do not describe a change as "released" unless `.vscode/release.ps1` completed successfully.
 - `scripts/build-and-deploy-vhcctweaks.ps1` and `scripts/push-all.ps1` are not release workflows. They produce deployed or pushed changes only.
@@ -34,6 +35,6 @@
 
 ## Git Workflow Preference
 
-- Default behavior after changes: commit and push directly to `master` without waiting for user review.
-- Use `scripts/push-all.ps1` for the default fast path.
+- Default behavior after vhcctweaks changes: run `.vscode/release.ps1` without waiting for user review.
+- Treat build-only, deploy-only, or push-only flows as incomplete unless the user explicitly asks not to release yet.
 - Do not rewrite history or force-push unless the user explicitly asks.

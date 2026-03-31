@@ -40,6 +40,8 @@ This single command handles everything:
 
 The `release.yml` GitHub Action then automatically creates a GitHub Release with the JAR attached.
 
+After any vhcctweaks repo change that should be kept, always finish by running this release flow. Build-only, deploy-only, and push-only workflows are incomplete unless the user explicitly says not to release yet.
+
 Use `-DryRun` to preview changes without modifying anything.
 
 ### CI Builds

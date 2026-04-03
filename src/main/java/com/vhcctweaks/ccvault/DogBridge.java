@@ -18,6 +18,7 @@ public class DogBridge {
     private static volatile boolean available = false;
 
     // Cached reflection handles
+    private static Method isInitialized;
     private static Method getBalance;  // long getBalance(UUID)
     private static Method addTokens;   // boolean addTokens(UUID, long)
     private static Method removeTokens; // boolean removeTokens(UUID, long)
@@ -29,6 +30,7 @@ public class DogBridge {
         initialized = true;
         try {
             Class<?> api = Class.forName(API_CLASS);
+            isInitialized = api.getMethod("isInitialized");
             getBalance = api.getMethod("getBalance", UUID.class);
             addTokens = api.getMethod("addTokens", UUID.class, long.class);
             removeTokens = api.getMethod("removeTokens", UUID.class, long.class);
@@ -44,7 +46,16 @@ public class DogBridge {
     /** Whether Dog's API is available on this server. */
     public static boolean isAvailable() {
         if (!initialized) init();
-        return available;
+        if (!available) {
+            return false;
+        }
+        try {
+            Object result = isInitialized.invoke(null);
+            return result instanceof Boolean && (Boolean) result;
+        } catch (Exception e) {
+            VHCCTweaks.LOGGER.error("CCVault: could not verify VaultTokenAPI initialization state", e);
+            return false;
+        }
     }
 
     /** Get the token balance for a UUID. Returns -1 if API unavailable. */

@@ -103,7 +103,7 @@ if bal then
 end
 ```
 
-`getPlayerBalance(playerName)` is read-only and resolves any known player by username without requiring terminal auth. It can inspect balances, but it cannot move tokens or modify any wallet state.
+`getPlayerBalance(playerName)` is read-only and resolves an online player name, a cached/offline profile name, or a direct UUID string without requiring terminal auth. It can inspect balances, but it cannot move tokens or modify any wallet state.
 
 ```lua
 local bal, err = ccvault.getPlayerBalance("Akkiruk")

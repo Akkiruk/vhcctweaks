@@ -1,6 +1,8 @@
 package com.vhcctweaks.ccvault;
 
+import com.mojang.authlib.Agent;
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.ProfileLookupCallback;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
@@ -11,11 +13,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.security.SecureRandom;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * CCVault Lua API exposed as "ccvault" to all CC:Tweaked computers.
@@ -30,7 +34,7 @@ import java.util.UUID;
  *   ccvault.isAuthenticated()                       -- check if session is active
  *   ccvault.getBalance("player")                    -- interacting player's balance
  *   ccvault.getBalance("host")                      -- computer owner's balance
- *   ccvault.getPlayerBalance("SomePlayer")          -- any player's current balance (read-only)
+ *   ccvault.getPlayerBalance("SomePlayer")          -- resolve a player name/UUID and read their balance
  *   ccvault.transfer("player", "host", 100, "shop") -- balanced transfer
  *   ccvault.getPlayerName()                         -- interacting player's name
  *   ccvault.getHostName()                           -- computer owner's name
@@ -119,7 +123,7 @@ public class CCVaultAPI implements ILuaAPI {
     }
 
     /**
-     * Get the current token balance for any known player by username.
+        * Get the current token balance for a player resolved by username or UUID string.
      * Read-only: does not require authentication and cannot change balances.
      *
      * Lua: local bal, err = ccvault.getPlayerBalance("SomePlayer")
@@ -133,7 +137,7 @@ public class CCVaultAPI implements ILuaAPI {
         String normalizedPlayerName = playerName.trim();
         UUID playerUuid = resolvePlayerUuidByName(normalizedPlayerName);
         if (playerUuid == null) {
-            return new Object[]{null, "unknown player '" + normalizedPlayerName + "'"};
+            return new Object[]{null, "unknown player or UUID '" + normalizedPlayerName + "'"};
         }
 
         long balance = DogBridge.getBalance(playerUuid);
@@ -491,12 +495,44 @@ public class CCVaultAPI implements ILuaAPI {
         var server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return null;
 
+        try {
+            return UUID.fromString(playerName);
+        } catch (IllegalArgumentException ignored) {
+            // Not a UUID string — continue with name-based lookup.
+        }
+
         ServerPlayer onlinePlayer = server.getPlayerList().getPlayerByName(playerName);
         if (onlinePlayer != null) {
             return onlinePlayer.getUUID();
         }
 
+        String normalizedLookup = playerName.toLowerCase(Locale.ROOT);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.getGameProfile().getName().equalsIgnoreCase(normalizedLookup)) {
+                return player.getUUID();
+            }
+        }
+
         Optional<GameProfile> cachedProfile = server.getProfileCache().get(playerName);
-        return cachedProfile.map(GameProfile::getId).orElse(null);
+        if (cachedProfile.isPresent() && cachedProfile.get().getId() != null) {
+            return cachedProfile.get().getId();
+        }
+
+        AtomicReference<UUID> resolvedUuid = new AtomicReference<>();
+        server.getProfileRepository().findProfilesByNames(new String[]{playerName}, Agent.MINECRAFT, new ProfileLookupCallback() {
+            @Override
+            public void onProfileLookupSucceeded(GameProfile profile) {
+                if (profile != null && profile.getId() != null) {
+                    resolvedUuid.compareAndSet(null, profile.getId());
+                    server.getProfileCache().add(profile);
+                }
+            }
+
+            @Override
+            public void onProfileLookupFailed(GameProfile profile, Exception exception) {
+                // Leave null and fall through to the caller's unknown-player response.
+            }
+        });
+        return resolvedUuid.get();
     }
 }

@@ -4,7 +4,8 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Hardened `ccvault` economy availability checks so balance reads fail closed until PlayerShops token data is initialized.
+- Expanded `ccvault.getPlayerBalance(playerName)` to accept UUID strings and fall back to a profile repository lookup when a player is not currently online or cached.
 
 ## [2.2.11] - 2026-03-30
 

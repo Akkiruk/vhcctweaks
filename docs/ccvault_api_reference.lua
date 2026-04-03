@@ -10,7 +10,7 @@
 --    * You CANNOT send tokens to arbitrary players or UUIDs.
 --    * You CANNOT create or destroy tokens. Every debit has an equal credit.
 --    * The only two identities you can reference are "player" and "host".
---    * Balance reads can target any known player by username.
+--    * Balance reads can target a player username or a UUID string.
 --    * All money-changing operations require the player to authenticate first.
 --    * Auth is handled by the mod, not by your Lua code.
 --    * Auth lasts until disconnect or 10 minutes of inactivity.
@@ -91,7 +91,7 @@ print("Authenticated! Welcome, " .. ccvault.getPlayerName())
 -- target must be "player" or "host". Requires authentication.
 --
 -- getPlayerBalance(playerName) -> number | nil, errorString
--- Read-only lookup for any known player by username. Does NOT require auth.
+-- Read-only lookup for an online/cached player name or a UUID string. Does NOT require auth.
 
 local playerBal, err = ccvault.getBalance("player")
 if playerBal then

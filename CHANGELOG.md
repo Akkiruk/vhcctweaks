@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Updated the Vault compile target to `the_vault-1.18.2-3.21.0.jar` and verified vhcctweaks builds cleanly against Vault 3.21.
+- No changes yet.
 
+## [2.2.14] - 2026-04-04
+
+- Updated the Vault compile target to `the_vault-1.18.2-3.21.0.jar` and verified vhcctweaks builds cleanly against Vault 3.21.
 ## [2.2.13] - 2026-04-04
 
 - Fixed Vault item detail serialization to avoid client-only dynamic model lookups on the server, returning the model resource location instead.

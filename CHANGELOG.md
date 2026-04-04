@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Fixed Vault item detail serialization to avoid client-only dynamic model lookups on the server, returning the model resource location instead.
+- No changes yet.
 
+## [2.2.13] - 2026-04-04
+
+- Fixed Vault item detail serialization to avoid client-only dynamic model lookups on the server, returning the model resource location instead.
 ## [2.2.12] - 2026-04-02
 
 - Hardened `ccvault` economy availability checks so balance reads fail closed until PlayerShops token data is initialized.

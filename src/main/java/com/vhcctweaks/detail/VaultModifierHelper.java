@@ -32,7 +32,6 @@ import iskallia.vault.gear.attribute.talent.RandomVaultModifierAttribute;
 import iskallia.vault.gear.attribute.talent.TalentLevelAttribute;
 import iskallia.vault.gear.data.VaultGearData;
 import iskallia.vault.gear.item.VaultGearItem;
-import iskallia.vault.init.ModDynamicModels;
 import iskallia.vault.init.ModGearAttributes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -121,14 +120,7 @@ public final class VaultModifierHelper {
         }
         if (instance.getAttribute().equals(ModGearAttributes.GEAR_MODEL)) {
             ResourceLocation loc = (ResourceLocation) instance.getValue();
-            String displayName = null;
-            try {
-                var model = ModDynamicModels.REGISTRIES.getModelByResourceLocation(loc);
-                if (model.isPresent()) {
-                    displayName = model.get().getDisplayName();
-                }
-            } catch (Exception ignored) {}
-            return simpleEntry("Model", displayName != null ? displayName : loc.toString());
+            return simpleEntry("Model", loc.toString());
         }
         if (instance.getAttribute().equals(ModGearAttributes.PREFIXES)) {
             return simpleEntry("Prefixes", instance.getValue());

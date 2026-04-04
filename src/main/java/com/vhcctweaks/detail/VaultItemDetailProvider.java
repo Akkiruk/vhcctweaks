@@ -9,7 +9,6 @@ import iskallia.vault.gear.attribute.VaultGearModifier.AffixType;
 import iskallia.vault.gear.data.AttributeGearData;
 import iskallia.vault.gear.data.VaultGearData;
 import iskallia.vault.gear.item.VaultGearItem;
-import iskallia.vault.init.ModDynamicModels;
 import iskallia.vault.init.ModGearAttributes;
 import iskallia.vault.item.AugmentItem;
 import iskallia.vault.item.CardItem;
@@ -146,14 +145,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         data.getFirstValue(ModGearAttributes.GEAR_NAME).ifPresent(v -> gear.put("gearName", v.toString()));
 
         // Model
-        data.getFirstValue(ModGearAttributes.GEAR_MODEL).ifPresent(loc -> {
-            try {
-                var model = ModDynamicModels.REGISTRIES.getModelByResourceLocation(loc);
-                gear.put("model", model.isPresent() ? model.get().getDisplayName() : loc.toString());
-            } catch (Exception e) {
-                gear.put("model", loc.toString());
-            }
-        });
+        data.getFirstValue(ModGearAttributes.GEAR_MODEL).ifPresent(loc -> gear.put("model", loc.toString()));
 
         // Modifiers
         gear.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT));

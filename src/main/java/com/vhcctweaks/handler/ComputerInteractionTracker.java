@@ -17,6 +17,7 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,11 +39,12 @@ public class ComputerInteractionTracker {
     private static final Map<Integer, UUID> computerToPlayer = new ConcurrentHashMap<>();
     // computer ID → interaction timestamp (epoch millis)
     private static final Map<Integer, Long> interactionTimestamps = new ConcurrentHashMap<>();
-    // player UUID → live ServerPlayer reference (cleaned up on logout)
-    private static final Map<UUID, ServerPlayer> onlinePlayers = new ConcurrentHashMap<>();
 
-    /** Max monitor blocks to traverse in BFS (prevents runaway on broken structures). */
-    private static final int MAX_MONITOR_BFS = 200;
+    /**
+     * Max monitor blocks to traverse in BFS. A full 16x16 monitor is 256 blocks,
+     * so leave headroom for large valid multiblocks while still bounding traversal.
+     */
+    private static final int MAX_MONITOR_BFS = 512;
 
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
@@ -152,9 +154,8 @@ public class ComputerInteractionTracker {
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.getPlayer() instanceof ServerPlayer player) {
-            onlinePlayers.remove(player.getUUID());
-        }
+        // No-op: getPlayer resolves through the live server player list instead of caching
+        // ServerPlayer instances, which avoids stale references across reconnects.
     }
 
     /**
@@ -163,11 +164,12 @@ public class ComputerInteractionTracker {
     public static ServerPlayer getPlayer(int computerId) {
         UUID uuid = computerToPlayer.get(computerId);
         if (uuid == null) return null;
-        ServerPlayer player = onlinePlayers.get(uuid);
-        if (player == null || player.isRemoved()) {
-            onlinePlayers.remove(uuid);
+        var server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
             return null;
         }
+        ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+        if (player == null || player.isRemoved()) return null;
         return player;
     }
 
@@ -194,7 +196,6 @@ public class ComputerInteractionTracker {
         computerToPlayer.put(computerId, player.getUUID());
         long now = System.currentTimeMillis();
         interactionTimestamps.put(computerId, now);
-        onlinePlayers.put(player.getUUID(), player);
         SessionAuthManager.touchSession(player.getUUID(), computerId);
 
         // Block computers still claim ownership on first interaction.

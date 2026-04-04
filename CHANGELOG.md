@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Increased monitor interaction traversal to support full 16x16 ComputerCraft monitors and resolved CCVault interaction players from the live server player list instead of cached `ServerPlayer` instances.
 
 ## [2.2.16] - 2026-04-04
 

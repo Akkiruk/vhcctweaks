@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Moved the `CC: Tweaked` and `Advanced Peripherals` researches into Vault's Addons section and corrected their GUI positions so they no longer overlap existing Handling researches.
+- No changes yet.
 
+## [2.2.16] - 2026-04-04
+
+- Moved the `CC: Tweaked` and `Advanced Peripherals` researches into Vault's Addons section and corrected their GUI positions so they no longer overlap existing Handling researches.
 ## [2.2.15] - 2026-04-04
 
 - Fixed dedicated-server startup patching so vhcctweaks now scans dedicated world `serverconfig` locations for ComputerCraft monitor size updates and auto-syncs its managed CraftTweaker recipe scripts into the root `scripts/` folder.

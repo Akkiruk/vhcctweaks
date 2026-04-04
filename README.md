@@ -139,7 +139,7 @@ Full API reference: [`docs/CCVAULT_API.md`](docs/CCVAULT_API.md)
 
 ## Installation
 
-1. Download `vhcctweaks-2.2.15.jar` from the [Releases](../../releases) page
+1. Download `vhcctweaks-2.2.16.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
 3. Launch the game or server - vhcctweaks will auto-sync its managed `ComputerCraft.zs` and `AdvancedPeripherals.zs` scripts into the runtime `scripts/` folder, and apply its config patches automatically on startup
 
@@ -185,7 +185,7 @@ Requires **JDK 17** and **Gradle 7.6+**.
 ./gradlew build
 ```
 
-Output: `build/libs/vhcctweaks-2.2.15.jar`
+Output: `build/libs/vhcctweaks-2.2.16.jar`
 
 ## Maintainer Release Workflow
 

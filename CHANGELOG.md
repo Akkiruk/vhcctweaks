@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Increased monitor interaction traversal to support full 16x16 ComputerCraft monitors and resolved CCVault interaction players from the live server player list instead of cached `ServerPlayer` instances.
+- No changes yet.
 
+## [2.2.17] - 2026-04-04
+
+- Increased monitor interaction traversal to support full 16x16 ComputerCraft monitors and resolved CCVault interaction players from the live server player list instead of cached `ServerPlayer` instances.
 ## [2.2.16] - 2026-04-04
 
 - Moved the `CC: Tweaked` and `Advanced Peripherals` researches into Vault's Addons section and corrected their GUI positions so they no longer overlap existing Handling researches.

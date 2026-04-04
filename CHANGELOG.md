@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Updated the Vault compile target to `the_vault-1.18.2-3.21.0.jar` and verified vhcctweaks builds cleanly against Vault 3.21.
 
 ## [2.2.13] - 2026-04-04
 

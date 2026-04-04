@@ -121,7 +121,7 @@ dependencies {
     compileOnly files("libs/AdvancedPeripherals-1.18.2-0.7.31r.jar")
 
     // The Vault (compile-only, for VaultItemDetailProvider gear/item introspection — Git LFS)
-    compileOnly files("libs/the_vault-1.18.2-3.20.3.6055.jar")
+    compileOnly files("libs/the_vault-1.18.2-3.21.0.jar")
 
     // Curios API (compile-only, transitive dependency of VH TrinketItem — Git LFS)
     compileOnly files("libs/curios-forge-1.18.2-5.0.9.2.jar")

@@ -63,7 +63,7 @@ When bumping the version, update ALL of these:
 Compile-only dependencies (not bundled in the JAR, all stored in `libs/` via Git LFS):
 - `cc-tweaked-1.18.2:1.101.3` — from SquidDev Maven (in `build.gradle`)
 - `AdvancedPeripherals-1.18.2-0.7.31r.jar` — Git LFS
-- `the_vault-1.18.2-3.20.3.6055.jar` — Git LFS
+- `the_vault-1.18.2-3.21.0.jar` — Git LFS
 - `curios-forge-1.18.2-5.0.9.2.jar` — Git LFS
 - `jei-1.18.2-9.7.2.1001.jar` — Git LFS
 

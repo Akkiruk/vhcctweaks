@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Fixed dedicated-server startup patching so vhcctweaks now scans dedicated world `serverconfig` locations for ComputerCraft monitor size updates and auto-syncs its managed CraftTweaker recipe scripts into the root `scripts/` folder.
+- No changes yet.
 
+## [2.2.15] - 2026-04-04
+
+- Fixed dedicated-server startup patching so vhcctweaks now scans dedicated world `serverconfig` locations for ComputerCraft monitor size updates and auto-syncs its managed CraftTweaker recipe scripts into the root `scripts/` folder.
 ## [2.2.14] - 2026-04-04
 
 - Updated the Vault compile target to `the_vault-1.18.2-3.21.0.jar` and verified vhcctweaks builds cleanly against Vault 3.21.

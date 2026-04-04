@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Moved the `CC: Tweaked` and `Advanced Peripherals` researches into Vault's Addons section and corrected their GUI positions so they no longer overlap existing Handling researches.
 
 ## [2.2.15] - 2026-04-04
 

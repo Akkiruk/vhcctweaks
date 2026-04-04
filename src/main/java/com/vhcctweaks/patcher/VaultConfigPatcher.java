@@ -24,6 +24,8 @@ public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String CC_WILDCARD = "computercraft:*";
     private static final String AP_WILDCARD = "advancedperipherals:*";
+    private static final String CC_RESEARCH = "CC: Tweaked";
+    private static final String AP_RESEARCH = "Advanced Peripherals";
     private static final String[] MANAGED_CRAFTTWEAKER_SCRIPTS = {"ComputerCraft.zs", "AdvancedPeripherals.zs"};
     private static final int MONITOR_MAX_WIDTH = 16;
     private static final int MONITOR_MAX_HEIGHT = 16;
@@ -135,7 +137,7 @@ public class VaultConfigPatcher {
         JsonArray researches = root.getAsJsonArray("MOD_RESEARCHES");
 
         // Add CC:Tweaked research gate
-        if (!hasResearchNamed(researches, "CC: Tweaked")) {
+        if (!hasResearchNamed(researches, CC_RESEARCH)) {
             JsonObject ccResearch = new JsonObject();
             JsonArray modIds = new JsonArray();
             modIds.add("computercraft");
@@ -151,16 +153,16 @@ public class VaultConfigPatcher {
             restrictions.add("restricts", restricts);
             ccResearch.add("restrictions", restrictions);
 
-            ccResearch.addProperty("name", "CC: Tweaked");
+            ccResearch.addProperty("name", CC_RESEARCH);
             ccResearch.addProperty("cost", 2);
             ccResearch.addProperty("usesKnowledge", true);
             researches.add(ccResearch);
             changed = true;
-            VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' research (cost 2)");
+            VHCCTweaks.LOGGER.info("Added '{}' research (cost 2)", CC_RESEARCH);
         }
 
         // Add Advanced Peripherals research gate
-        if (!hasResearchNamed(researches, "Advanced Peripherals")) {
+        if (!hasResearchNamed(researches, AP_RESEARCH)) {
             JsonObject apResearch = new JsonObject();
             JsonArray apModIds = new JsonArray();
             apModIds.add("advancedperipherals");
@@ -176,12 +178,12 @@ public class VaultConfigPatcher {
             apRestrictions.add("restricts", apRestricts);
             apResearch.add("restrictions", apRestrictions);
 
-            apResearch.addProperty("name", "Advanced Peripherals");
+            apResearch.addProperty("name", AP_RESEARCH);
             apResearch.addProperty("cost", 2);
             apResearch.addProperty("usesKnowledge", true);
             researches.add(apResearch);
             changed = true;
-            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' research (cost 2)");
+            VHCCTweaks.LOGGER.info("Added '{}' research (cost 2)", AP_RESEARCH);
         }
 
         if (changed) {
@@ -201,23 +203,39 @@ public class VaultConfigPatcher {
 
         if (!root.has("groups")) return;
         JsonObject groups = root.getAsJsonObject("groups");
-        if (!groups.has("Handling")) return;
+        if (!groups.has("Addons")) return;
 
-        JsonObject handling = groups.getAsJsonObject("Handling");
-        if (!handling.has("research")) return;
-
-        JsonArray research = handling.getAsJsonArray("research");
         boolean changed = false;
-        if (!arrayContains(research, "CC: Tweaked")) {
-            research.add("CC: Tweaked");
-            changed = true;
-            VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' to Handling research group");
+        JsonObject addons = groups.getAsJsonObject("Addons");
+        if (addons.has("research")) {
+            JsonArray addonResearch = addons.getAsJsonArray("research");
+            if (!arrayContains(addonResearch, CC_RESEARCH)) {
+                addonResearch.add(CC_RESEARCH);
+                changed = true;
+                VHCCTweaks.LOGGER.info("Added '{}' to Addons research group", CC_RESEARCH);
+            }
+            if (!arrayContains(addonResearch, AP_RESEARCH)) {
+                addonResearch.add(AP_RESEARCH);
+                changed = true;
+                VHCCTweaks.LOGGER.info("Added '{}' to Addons research group", AP_RESEARCH);
+            }
         }
-        if (!arrayContains(research, "Advanced Peripherals")) {
-            research.add("Advanced Peripherals");
-            changed = true;
-            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' to Handling research group");
+
+        if (groups.has("Handling")) {
+            JsonObject handling = groups.getAsJsonObject("Handling");
+            if (handling.has("research")) {
+                JsonArray handlingResearch = handling.getAsJsonArray("research");
+                if (removeString(handlingResearch, CC_RESEARCH)) {
+                    changed = true;
+                    VHCCTweaks.LOGGER.info("Removed '{}' from Handling research group", CC_RESEARCH);
+                }
+                if (removeString(handlingResearch, AP_RESEARCH)) {
+                    changed = true;
+                    VHCCTweaks.LOGGER.info("Removed '{}' from Handling research group", AP_RESEARCH);
+                }
+            }
         }
+
         if (changed) {
             Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
@@ -239,31 +257,62 @@ public class VaultConfigPatcher {
         JsonObject styles = root.getAsJsonObject("styles");
 
         boolean guiChanged = false;
-        if (!styles.has("CC: Tweaked")) {
-            JsonObject ccStyle = new JsonObject();
-            ccStyle.addProperty("x", 10);
-            ccStyle.addProperty("y", 320);
-            ccStyle.addProperty("frameType", "RECTANGULAR");
-            ccStyle.addProperty("icon", "the_vault:gui/researches/cc_tweaked");
-            styles.add("CC: Tweaked", ccStyle);
-            guiChanged = true;
-            VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' GUI style to researches_gui_styles.json");
-        }
-
-        if (!styles.has("Advanced Peripherals")) {
-            JsonObject apStyle = new JsonObject();
-            apStyle.addProperty("x", 110);
-            apStyle.addProperty("y", 320);
-            apStyle.addProperty("frameType", "RECTANGULAR");
-            apStyle.addProperty("icon", "the_vault:gui/researches/advanced_peripherals");
-            styles.add("Advanced Peripherals", apStyle);
-            guiChanged = true;
-            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' GUI style to researches_gui_styles.json");
-        }
+        guiChanged |= ensureResearchStyle(styles, CC_RESEARCH, 580, 40, "the_vault:gui/researches/cc_tweaked");
+        guiChanged |= ensureResearchStyle(styles, AP_RESEARCH, 630, 40, "the_vault:gui/researches/advanced_peripherals");
 
         if (guiChanged) {
             Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
+    }
+
+    private static boolean ensureResearchStyle(JsonObject styles, String researchName, int x, int y, String icon) {
+        JsonObject style = styles.has(researchName) && styles.get(researchName).isJsonObject()
+                ? styles.getAsJsonObject(researchName)
+                : new JsonObject();
+        boolean changed = false;
+
+        changed |= setIntProperty(style, "x", x);
+        changed |= setIntProperty(style, "y", y);
+        changed |= setStringProperty(style, "frameType", "RECTANGULAR");
+        changed |= setStringProperty(style, "icon", icon);
+
+        if (!styles.has(researchName) || styles.get(researchName) != style) {
+            styles.add(researchName, style);
+            changed = true;
+        }
+
+        if (changed) {
+            VHCCTweaks.LOGGER.info("Positioned '{}' research in Addons at {},{}", researchName, x, y);
+        }
+
+        return changed;
+    }
+
+    private static boolean setIntProperty(JsonObject object, String key, int value) {
+        if (object.has(key) && object.get(key).isJsonPrimitive() && object.get(key).getAsInt() == value) {
+            return false;
+        }
+        object.addProperty(key, value);
+        return true;
+    }
+
+    private static boolean setStringProperty(JsonObject object, String key, String value) {
+        if (object.has(key) && object.get(key).isJsonPrimitive() && value.equals(object.get(key).getAsString())) {
+            return false;
+        }
+        object.addProperty(key, value);
+        return true;
+    }
+
+    private static boolean removeString(JsonArray array, String value) {
+        for (int i = 0; i < array.size(); i++) {
+            JsonElement element = array.get(i);
+            if (element.isJsonPrimitive() && value.equals(element.getAsString())) {
+                array.remove(i);
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void patchSkillDescriptions(Path configDir) throws IOException {

@@ -3,10 +3,14 @@ package com.vhcctweaks.patcher;
 import com.google.gson.*;
 import com.vhcctweaks.VHCCTweaks;
 
+import java.io.InputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,6 +24,7 @@ public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String CC_WILDCARD = "computercraft:*";
     private static final String AP_WILDCARD = "advancedperipherals:*";
+    private static final String[] MANAGED_CRAFTTWEAKER_SCRIPTS = {"ComputerCraft.zs", "AdvancedPeripherals.zs"};
     private static final int MONITOR_MAX_WIDTH = 16;
     private static final int MONITOR_MAX_HEIGHT = 16;
 
@@ -61,6 +66,11 @@ public class VaultConfigPatcher {
             patchComputerCraftConfigs(gameDir);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.warn("Could not patch ComputerCraft configs: {}", e.getMessage());
+        }
+        try {
+            syncCraftTweakerScripts(gameDir);
+        } catch (Exception e) {
+            VHCCTweaks.LOGGER.warn("Could not sync CraftTweaker scripts: {}", e.getMessage());
         }
     }
 
@@ -492,11 +502,22 @@ public class VaultConfigPatcher {
     }
 
     private static void patchComputerCraftConfigs(Path gameDir) throws IOException {
-        patchComputerCraftMonitorToml(gameDir.resolve("defaultconfigs").resolve("computercraft-server.toml"));
+        Set<Path> configPaths = new LinkedHashSet<>();
+        configPaths.add(gameDir.resolve("defaultconfigs").resolve("computercraft-server.toml"));
+        configPaths.add(gameDir.resolve("serverconfig").resolve("computercraft-server.toml"));
+
+        Path dedicatedWorldDir = resolveDedicatedWorldDir(gameDir);
+        if (dedicatedWorldDir != null) {
+            configPaths.add(dedicatedWorldDir.resolve("serverconfig").resolve("computercraft-server.toml"));
+        }
+
+        for (Path path : configPaths) {
+            patchComputerCraftMonitorTomlUnchecked(path);
+        }
 
         Path savesDir = gameDir.resolve("saves");
         if (!Files.isDirectory(savesDir)) {
-            VHCCTweaks.LOGGER.info("No saves directory found, skipping ComputerCraft save config patches");
+            VHCCTweaks.LOGGER.info("No saves directory found, skipping integrated-world ComputerCraft config patches");
             return;
         }
 
@@ -504,6 +525,59 @@ public class VaultConfigPatcher {
             saves.filter(Files::isDirectory)
                     .map(saveDir -> saveDir.resolve("serverconfig").resolve("computercraft-server.toml"))
                     .forEach(VaultConfigPatcher::patchComputerCraftMonitorTomlUnchecked);
+        }
+    }
+
+    private static Path resolveDedicatedWorldDir(Path gameDir) {
+        Path serverProperties = gameDir.resolve("server.properties");
+        if (!Files.exists(serverProperties)) {
+            Path defaultWorldDir = gameDir.resolve("world");
+            return Files.isDirectory(defaultWorldDir) ? defaultWorldDir : null;
+        }
+
+        Properties properties = new Properties();
+        try (var reader = Files.newBufferedReader(serverProperties, StandardCharsets.UTF_8)) {
+            properties.load(reader);
+        } catch (IOException e) {
+            VHCCTweaks.LOGGER.warn("Could not read {}: {}", serverProperties, e.getMessage());
+            return gameDir.resolve("world");
+        }
+
+        String levelName = properties.getProperty("level-name", "world").trim();
+        if (levelName.isEmpty()) {
+            levelName = "world";
+        }
+
+        return gameDir.resolve(levelName);
+    }
+
+    private static void syncCraftTweakerScripts(Path gameDir) throws IOException {
+        Path scriptsDir = gameDir.resolve("scripts");
+        Files.createDirectories(scriptsDir);
+
+        for (String scriptName : MANAGED_CRAFTTWEAKER_SCRIPTS) {
+            syncCraftTweakerScript(scriptsDir, scriptName);
+        }
+    }
+
+    private static void syncCraftTweakerScript(Path scriptsDir, String scriptName) throws IOException {
+        String resourcePath = "/vhcctweaks-scripts/" + scriptName;
+        try (InputStream stream = VaultConfigPatcher.class.getResourceAsStream(resourcePath)) {
+            if (stream == null) {
+                VHCCTweaks.LOGGER.warn("Bundled CraftTweaker script {} not found in jar", resourcePath);
+                return;
+            }
+
+            String bundledContent = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            Path targetPath = scriptsDir.resolve(scriptName);
+            String existingContent = Files.exists(targetPath)
+                    ? Files.readString(targetPath, StandardCharsets.UTF_8)
+                    : null;
+
+            if (!bundledContent.equals(existingContent)) {
+                Files.writeString(targetPath, bundledContent, StandardCharsets.UTF_8);
+                VHCCTweaks.LOGGER.info("Synced CraftTweaker script {} to {}", scriptName, targetPath);
+            }
         }
     }
 

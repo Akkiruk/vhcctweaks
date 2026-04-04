@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Fixed dedicated-server startup patching so vhcctweaks now scans dedicated world `serverconfig` locations for ComputerCraft monitor size updates and auto-syncs its managed CraftTweaker recipe scripts into the root `scripts/` folder.
 
 ## [2.2.14] - 2026-04-04
 

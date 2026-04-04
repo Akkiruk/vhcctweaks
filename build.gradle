@@ -13,6 +13,7 @@ gradlePropsFile.withInputStream { gradleProps.load(it) }
 def trackedFiles = files(
     fileTree(dir: 'src/main/java', includes: ['**/*.java']),
     fileTree(dir: 'src/main/resources', excludes: ['**/.cache/**']),
+    fileTree(dir: 'scripts', includes: ['*.zs']),
     file('build.gradle'),
     file('settings.gradle'),
     file('gradle.properties')
@@ -174,6 +175,13 @@ tasks.register('checkClientPacketSafety') {
 
 tasks.named('check').configure {
     dependsOn tasks.named('checkClientPacketSafety')
+}
+
+tasks.named('processResources').configure {
+    from('scripts') {
+        include '*.zs'
+        into 'vhcctweaks-scripts'
+    }
 }
 
 jar {

@@ -53,7 +53,7 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 All AP-targeting mixins use string `targets` (not class references) so they gracefully no-op if AP is not installed.
 
 ### Recipe Overrides (via CraftTweaker)
-All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials using CraftTweaker scripts in the `scripts/` folder. A JEI mixin suppresses CC's built-in impostor recipes so JEI only shows the VH versions.
+All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials using CraftTweaker scripts in the `scripts/` folder. vhcctweaks now auto-syncs its managed `ComputerCraft.zs` and `AdvancedPeripherals.zs` scripts into the runtime `scripts/` folder on startup, including dedicated servers. A JEI mixin suppresses CC's built-in impostor recipes so JEI only shows the VH versions.
 
 **CC:Tweaked (23 recipes - `scripts/ComputerCraft.zs`)**
 | Tier | Material | Items |
@@ -141,8 +141,7 @@ Full API reference: [`docs/CCVAULT_API.md`](docs/CCVAULT_API.md)
 
 1. Download `vhcctweaks-2.2.14.jar` from the [Releases](../../releases) page
 2. Drop it into your Vault Hunters instance `mods/` folder
-3. Copy `scripts/ComputerCraft.zs` and `scripts/AdvancedPeripherals.zs` from this repo into your instance's `scripts/` folder
-4. Launch the game - all config patching happens automatically on first startup
+3. Launch the game or server - vhcctweaks will auto-sync its managed `ComputerCraft.zs` and `AdvancedPeripherals.zs` scripts into the runtime `scripts/` folder, and apply its config patches automatically on startup
 
 > **Note:** The `.zs` scripts require [CraftTweaker](https://modrinth.com/mod/crafttweaker) and [JEITweaker](https://modrinth.com/mod/jeitweaker) (both included in Vault Hunters). The scripts are fully self-contained - each one removes the default recipes and adds VH replacements, so no edits to other files are needed.
 

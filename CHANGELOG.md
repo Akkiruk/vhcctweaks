@@ -4,9 +4,12 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [2.2.19] - 2026-04-07
+
 - Removed the `CC: Tweaked` Vault research injection and the `Automatic Genius` crafty-turtle research gate.
 - Existing installs now clean previously injected `CC: Tweaked` research entries, GUI styles, and skill descriptions from Vault config JSON on startup.
-
 ## [2.2.17] - 2026-04-04
 
 - Increased monitor interaction traversal to support full 16x16 ComputerCraft monitors and resolved CCVault interaction players from the live server player list instead of cached `ServerPlayer` instances.

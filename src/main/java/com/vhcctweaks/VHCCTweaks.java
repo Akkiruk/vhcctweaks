@@ -9,7 +9,6 @@ import com.vhcctweaks.command.CCVaultCommand;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
-import com.vhcctweaks.handler.CraftingLockHandler;
 import com.vhcctweaks.handler.VaultProtectionHandler;
 import com.vhcctweaks.patcher.VaultConfigPatcher;
 import com.vhcctweaks.detail.VaultItemDetailProvider;
@@ -38,8 +37,6 @@ public class VHCCTweaks {
 
         // Vault dimension protection (blocks all CC blocks/items in vaults)
         MinecraftForge.EVENT_BUS.register(VaultProtectionHandler.class);
-        // Crafty turtle lock (strips crafting upgrade until research is unlocked)
-        MinecraftForge.EVENT_BUS.register(CraftingLockHandler.class);
         // Track which player last interacted with each CC computer
         MinecraftForge.EVENT_BUS.register(ComputerInteractionTracker.class);
         // Track which player owns each CC computer (host UUID for CCVault)
@@ -49,7 +46,8 @@ public class VHCCTweaks {
         // Command registration and server start events
         MinecraftForge.EVENT_BUS.register(VHCCTweaks.class);
 
-        // Patch VH config files early (adds CC entries to blacklists/researches)
+        // Patch VH config files early (adds blacklist entries, maintains AP research,
+        // and removes the legacy CC research injection)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
         // Patch CC:Tweaked monitor sizes and sync managed CraftTweaker scripts for both
         // integrated and dedicated-server folder layouts.

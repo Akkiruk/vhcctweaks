@@ -13,7 +13,6 @@ A Forge mod that balances [CC:Tweaked](https://modrinth.com/mod/cc-tweaked) and 
 
 CC:Tweaked and Advanced Peripherals are powerful automation mods, but their default capabilities break Vault Hunters' progression in several ways:
 
-- Turtles can autocraft without any research investment
 - Environment Detectors can reverse-engineer the world seed via slime chunk mapping
 - ChatBox peripherals can spoof server messages and create hidden communication channels
 - Overpowered peripherals (chunk loading, x-ray scanning, remote inventory access) bypass VH balance
@@ -23,18 +22,11 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 
 ## Features
 
-### Research Gates
-- Adds **CC: Tweaked** and **Advanced Peripherals** as separate researches in the VH **Handling** group
-- Each costs **2 Knowledge Stars** and gates crafting, placement, and interaction
-- Custom icons and styled descriptions appear in the VH research GUI
-- Research entries are auto-injected into VH config files on first launch
-
-### Turtle Autocrafting Lock
-- `turtle.craft()` is gated behind the **Automatic Genius** research
-- **Primary enforcement**: Mixin on `TurtleCraftCommand.execute()` - blocks the call before any crafting logic runs
-- **Backup enforcement**: `ItemCraftedEvent` handler catches CC's FakePlayer crafting, and a periodic inventory sweep strips the crafting upgrade from turtle items
-- Regular turtle features (mining, building, moving, fuel) are **not** restricted
-- Checks the turtle owner's VH research progress via reflection (supports offline owners)
+### Advanced Peripherals Research Gate
+- Adds **Advanced Peripherals** as a separate research in the VH **Addons** group
+- Costs **2 Knowledge Stars** and gates crafting, placement, and interaction
+- Custom icon and styled description appear in the VH research GUI
+- Research entry is auto-injected into VH config files on first launch
 
 ### Vault Dimension Protection
 - Blocks **placement**, **interaction**, **use**, **mining**, and **breaking** of all CC:Tweaked and Advanced Peripherals blocks inside vaults
@@ -45,7 +37,6 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 ### Security Mixins
 | Mixin | Target | Purpose |
 |-------|--------|---------|
-| `TurtleCraftCommandMixin` | CC:Tweaked | Blocks `turtle.craft()` without Automatic Genius research |
 | `EnvironmentDetectorMixin` | Advanced Peripherals | Forces `isSlimeChunk()` to always return `false` - prevents world seed reverse-engineering |
 | `ChatBoxEventsMixin` | Advanced Peripherals | Removes the hidden `$` chat channel that suppresses messages from normal chat |
 | `ChatBoxPeripheralMixin` | Advanced Peripherals | Blocks `sendFormattedMessage` / `sendFormattedMessageToPlayer` - prevents JSON-based message spoofing |
@@ -155,26 +146,23 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 |---------|---------|-------------|
 | `vault.blockCCInVault` | `true` | Block all CC/AP blocks and items inside the Vault dimension |
 | `vault.vaultDimension` | `the_vault:vault` | Resource location of the Vault dimension |
-| `autocrafting.lockCraftyTurtles` | `true` | Gate crafting turtles behind VH research |
-| `autocrafting.autocraftingResearchName` | `Automatic Genius` | Which VH research unlocks autocrafting |
 | `ccvault.authIdleTimeoutMinutes` | `10` | Inactivity timeout before a CCVault approval expires |
 | `ccvault.nonceExpirySeconds` | `60` | How long the clickable approval prompt stays valid |
 | `ccvault.interactionStaleSeconds` | `30` | How recent player interaction must be for financial operations |
 
 ## Testing
 
-A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with 11 test groups:
+A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with validation groups for:
 
 0. Environment detection
-1. Turtle craft research gate
-2. Vault dimension protection
-3. isSlimeChunk blocked
-4. ChatBox hidden `$` channel
-5. sendFormattedMessage blocked
-6. AP disabled peripherals (config)
-7. Recipe overrides (manual JEI check)
-8. VH research entries
-9. Allowed features verification
+1. Vault dimension protection
+2. isSlimeChunk blocked
+3. ChatBox hidden `$` channel
+4. sendFormattedMessage blocked
+5. AP disabled peripherals (config)
+6. Recipe overrides (manual JEI check)
+7. AP research entry
+8. Allowed features verification
 Run it on a CC computer or turtle in-game. Results are saved to both the CC filesystem and the real filesystem via the `vhcc` API.
 
 ## Building from Source
@@ -216,10 +204,8 @@ src/main/java/com/vhcctweaks/
 |   |-- ComputerInteractionTracker.java  # Player->Computer right-click mapping
 |   |-- ComputerPlacementTracker.java    # Computer->Owner placement mapping
 |   |-- ComputerReflectionHelper.java    # Shared CC reflection utilities
-|   |-- CraftingLockHandler.java         # Crafty turtle research gate
 |   `-- VaultProtectionHandler.java      # Vault dimension block
 |-- mixin/
-|   |-- TurtleCraftCommandMixin.java     # turtle.craft() block
 |   |-- RecipeResolverMixin.java         # JEI impostor recipe suppression
 |   |-- ChatBoxEventsMixin.java          # $ channel removal
 |   |-- ChatBoxPeripheralMixin.java      # Formatted message block

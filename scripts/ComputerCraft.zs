@@ -1,6 +1,6 @@
 /* CC:Tweaked recipe overrides for Vault Hunters
    All recipes gated behind VH materials to match modpack balance.
-   CC is a 2-star research — basic tier uses chromatic iron + larimar,
+    Basic tier uses chromatic iron + larimar,
    advanced tier uses chromatic steel + perfect larimar.
    scripts made by Douwsky / VHCCTweaks
    https://github.com/Akkiruk/vhcctweaks */

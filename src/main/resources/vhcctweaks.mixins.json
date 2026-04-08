@@ -3,7 +3,6 @@
   "package": "com.vhcctweaks.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
-    "TurtleCraftCommandMixin",
     "EnvironmentDetectorMixin",
     "ChatBoxEventsMixin",
     "ChatBoxPeripheralMixin",

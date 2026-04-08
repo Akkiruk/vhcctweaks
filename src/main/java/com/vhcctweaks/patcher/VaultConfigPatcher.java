@@ -15,10 +15,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Patches Vault Hunters config JSON files on startup to add CC:Tweaked entries.
+ * Patches Vault Hunters config JSON files on startup for vhcctweaks-managed entries.
  * This ensures:
  * - computercraft:* is in the vault item/block blacklists
- * - CC:Tweaked has a research gate
+ * - Advanced Peripherals stays in the Vault research tree
+ * - legacy CC:Tweaked research entries injected by older versions are removed
  */
 public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -136,29 +137,9 @@ public class VaultConfigPatcher {
         if (!root.has("MOD_RESEARCHES")) return;
         JsonArray researches = root.getAsJsonArray("MOD_RESEARCHES");
 
-        // Add CC:Tweaked research gate
-        if (!hasResearchNamed(researches, CC_RESEARCH)) {
-            JsonObject ccResearch = new JsonObject();
-            JsonArray modIds = new JsonArray();
-            modIds.add("computercraft");
-            ccResearch.add("modIds", modIds);
-
-            JsonObject restrictions = new JsonObject();
-            JsonObject restricts = new JsonObject();
-            restricts.addProperty("HITTABILITY", false);
-            restricts.addProperty("BLOCK_INTERACTABILITY", true);
-            restricts.addProperty("USABILITY", true);
-            restricts.addProperty("CRAFTABILITY", true);
-            restricts.addProperty("ENTITY_INTERACTABILITY", false);
-            restrictions.add("restricts", restricts);
-            ccResearch.add("restrictions", restrictions);
-
-            ccResearch.addProperty("name", CC_RESEARCH);
-            ccResearch.addProperty("cost", 2);
-            ccResearch.addProperty("usesKnowledge", true);
-            researches.add(ccResearch);
+        if (removeResearchNamed(researches, CC_RESEARCH)) {
             changed = true;
-            VHCCTweaks.LOGGER.info("Added '{}' research (cost 2)", CC_RESEARCH);
+            VHCCTweaks.LOGGER.info("Removed legacy '{}' research entry", CC_RESEARCH);
         }
 
         // Add Advanced Peripherals research gate
@@ -203,21 +184,31 @@ public class VaultConfigPatcher {
 
         if (!root.has("groups")) return;
         JsonObject groups = root.getAsJsonObject("groups");
-        if (!groups.has("Addons")) return;
 
         boolean changed = false;
-        JsonObject addons = groups.getAsJsonObject("Addons");
-        if (addons.has("research")) {
-            JsonArray addonResearch = addons.getAsJsonArray("research");
-            if (!arrayContains(addonResearch, CC_RESEARCH)) {
-                addonResearch.add(CC_RESEARCH);
+        for (String groupName : groups.keySet()) {
+            JsonElement groupElement = groups.get(groupName);
+            if (!groupElement.isJsonObject()) continue;
+
+            JsonObject group = groupElement.getAsJsonObject();
+            if (!group.has("research")) continue;
+
+            JsonArray researchArray = group.getAsJsonArray("research");
+            if (removeString(researchArray, CC_RESEARCH)) {
                 changed = true;
-                VHCCTweaks.LOGGER.info("Added '{}' to Addons research group", CC_RESEARCH);
+                VHCCTweaks.LOGGER.info("Removed legacy '{}' from {} research group", CC_RESEARCH, groupName);
             }
-            if (!arrayContains(addonResearch, AP_RESEARCH)) {
-                addonResearch.add(AP_RESEARCH);
-                changed = true;
-                VHCCTweaks.LOGGER.info("Added '{}' to Addons research group", AP_RESEARCH);
+        }
+
+        if (groups.has("Addons")) {
+            JsonObject addons = groups.getAsJsonObject("Addons");
+            if (addons.has("research")) {
+                JsonArray addonResearch = addons.getAsJsonArray("research");
+                if (!arrayContains(addonResearch, AP_RESEARCH)) {
+                    addonResearch.add(AP_RESEARCH);
+                    changed = true;
+                    VHCCTweaks.LOGGER.info("Added '{}' to Addons research group", AP_RESEARCH);
+                }
             }
         }
 
@@ -225,10 +216,6 @@ public class VaultConfigPatcher {
             JsonObject handling = groups.getAsJsonObject("Handling");
             if (handling.has("research")) {
                 JsonArray handlingResearch = handling.getAsJsonArray("research");
-                if (removeString(handlingResearch, CC_RESEARCH)) {
-                    changed = true;
-                    VHCCTweaks.LOGGER.info("Removed '{}' from Handling research group", CC_RESEARCH);
-                }
                 if (removeString(handlingResearch, AP_RESEARCH)) {
                     changed = true;
                     VHCCTweaks.LOGGER.info("Removed '{}' from Handling research group", AP_RESEARCH);
@@ -257,7 +244,10 @@ public class VaultConfigPatcher {
         JsonObject styles = root.getAsJsonObject("styles");
 
         boolean guiChanged = false;
-        guiChanged |= ensureResearchStyle(styles, CC_RESEARCH, 580, 40, "the_vault:gui/researches/cc_tweaked");
+        if (styles.remove(CC_RESEARCH) != null) {
+            guiChanged = true;
+            VHCCTweaks.LOGGER.info("Removed legacy '{}' GUI style", CC_RESEARCH);
+        }
         guiChanged |= ensureResearchStyle(styles, AP_RESEARCH, 630, 40, "the_vault:gui/researches/advanced_peripherals");
 
         if (guiChanged) {
@@ -305,14 +295,15 @@ public class VaultConfigPatcher {
     }
 
     private static boolean removeString(JsonArray array, String value) {
-        for (int i = 0; i < array.size(); i++) {
+        boolean changed = false;
+        for (int i = array.size() - 1; i >= 0; i--) {
             JsonElement element = array.get(i);
             if (element.isJsonPrimitive() && value.equals(element.getAsString())) {
                 array.remove(i);
-                return true;
+                changed = true;
             }
         }
-        return false;
+        return changed;
     }
 
     private static void patchSkillDescriptions(Path configDir) throws IOException {
@@ -329,46 +320,9 @@ public class VaultConfigPatcher {
         JsonObject descriptions = root.getAsJsonObject("descriptions");
 
         boolean descChanged = false;
-        if (!descriptions.has("CC: Tweaked")) {
-            JsonArray desc = new JsonArray();
-
-            JsonObject line1 = new JsonObject();
-            line1.addProperty("text", "Unlocks the ");
-            desc.add(line1);
-
-            JsonObject line2 = new JsonObject();
-            line2.addProperty("text", "CC: Tweaked ");
-            line2.addProperty("color", "yellow");
-            desc.add(line2);
-
-            JsonObject line3 = new JsonObject();
-            line3.addProperty("text", "mod!\n\nThis mod adds programmable computers and turtle robots to " +
-                    "the game! Write Lua programs to automate tasks, control redstone, " +
-                    "build monitoring systems and much more. Turtles can mine, move and " +
-                    "interact with the world on your behalf. Some features of CC: Tweaked, such as ");
-            desc.add(line3);
-
-            JsonObject line4 = new JsonObject();
-            line4.addProperty("text", "turtle autocrafting");
-            line4.addProperty("color", "gold");
-            desc.add(line4);
-
-            JsonObject line5 = new JsonObject();
-            line5.addProperty("text", ", requires the ");
-            desc.add(line5);
-
-            JsonObject line6 = new JsonObject();
-            line6.addProperty("text", "Automatic Genius");
-            line6.addProperty("color", "aqua");
-            desc.add(line6);
-
-            JsonObject line7 = new JsonObject();
-            line7.addProperty("text", " research. CC items cannot be brought into the vaults.");
-            desc.add(line7);
-
-            descriptions.add("CC: Tweaked", desc);
+        if (descriptions.remove(CC_RESEARCH) != null) {
             descChanged = true;
-            VHCCTweaks.LOGGER.info("Added 'CC: Tweaked' description to skill_descriptions.json");
+            VHCCTweaks.LOGGER.info("Removed legacy '{}' description from skill_descriptions.json", CC_RESEARCH);
         }
 
         if (!descriptions.has("Advanced Peripherals")) {
@@ -712,5 +666,20 @@ public class VaultConfigPatcher {
             }
         }
         return false;
+    }
+
+    private static boolean removeResearchNamed(JsonArray researches, String name) {
+        boolean changed = false;
+        for (int i = researches.size() - 1; i >= 0; i--) {
+            JsonElement el = researches.get(i);
+            if (el.isJsonObject()) {
+                JsonObject obj = el.getAsJsonObject();
+                if (obj.has("name") && obj.get("name").getAsString().equals(name)) {
+                    researches.remove(i);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
     }
 }

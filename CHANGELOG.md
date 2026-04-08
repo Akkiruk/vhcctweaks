@@ -4,7 +4,8 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Removed the `CC: Tweaked` Vault research injection and the `Automatic Genius` crafty-turtle research gate.
+- Existing installs now clean previously injected `CC: Tweaked` research entries, GUI styles, and skill descriptions from Vault config JSON on startup.
 
 ## [2.2.17] - 2026-04-04
 

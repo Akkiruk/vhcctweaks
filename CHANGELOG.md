@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Removed the artifact projector autofill helper from vhcctweaks; it now lives in a separate standalone mod.
 
 ## [2.2.21] - 2026-04-09
 

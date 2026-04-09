@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Removed the artifact projector autofill helper from vhcctweaks; it now lives in a separate standalone mod.
+- No changes yet.
 
+## [2.2.22] - 2026-04-09
+
+- Removed the artifact projector autofill helper from vhcctweaks; it now lives in a separate standalone mod.
 ## [2.2.21] - 2026-04-09
 
 - Added a client-side artifact projector autofill helper that batch-places artifacts from your inventory by right-clicking your own incomplete projector.

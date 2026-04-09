@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Added a client-side artifact projector autofill helper that batch-places artifacts from your inventory by right-clicking your own incomplete projector.
+- No changes yet.
 
+## [2.2.21] - 2026-04-09
+
+- Added a client-side artifact projector autofill helper that batch-places artifacts from your inventory by right-clicking your own incomplete projector.
 ## [2.2.19] - 2026-04-07
 
 - Removed the `CC: Tweaked` Vault research injection and the `Automatic Genius` crafty-turtle research gate.

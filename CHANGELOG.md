@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Added a client-side artifact projector autofill helper that batch-places artifacts from your inventory by right-clicking your own incomplete projector.
 
 ## [2.2.19] - 2026-04-07
 

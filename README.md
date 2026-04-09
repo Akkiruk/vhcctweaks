@@ -62,6 +62,11 @@ All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials us
 | Bridges | Chromatic Steel + Mod Components | ME Bridge (AE2), RS Bridge (Refined Storage) |
 | Automata | Chromatic Steel + Vault Diamond | Weak Automata Core, Overpowered Weak/End/Husbandry Automata Cores |
 
+### Artifact Projector Autofill
+- Client-side quality-of-life helper for Vault artifact projectors
+- Right-clicking your own incomplete projector batch-places any matching artifacts from your inventory using normal vanilla inventory swaps and block-use actions
+- Uses Vault's existing server-side artifact mapping and ownership checks, so it does not spoof custom placement packets
+
 ### Network Configuration
 - Command computers **disabled**
 - Wireless modem range **reduced** (32/64 blocks normal, 16/32 in storms)
@@ -149,6 +154,12 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 | `ccvault.authIdleTimeoutMinutes` | `10` | Inactivity timeout before a CCVault approval expires |
 | `ccvault.nonceExpirySeconds` | `60` | How long the clickable approval prompt stays valid |
 | `ccvault.interactionStaleSeconds` | `30` | How recent player interaction must be for financial operations |
+
+A client config file is generated at `config/vhcctweaks-client.toml`:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `artifactProjector.autofillEnabled` | `true` | Batch-place artifacts from your inventory when you right-click your own incomplete artifact projector |
 
 ## Testing
 

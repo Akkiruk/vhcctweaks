@@ -3,7 +3,11 @@ package com.vhcctweaks.config;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 public class ModConfig {
+        public static final ForgeConfigSpec CLIENT_SPEC;
     public static final ForgeConfigSpec SERVER_SPEC;
+
+        // Client helpers
+        public static final ForgeConfigSpec.BooleanValue ARTIFACT_PROJECTOR_AUTOFILL_ENABLED;
 
     // Vault protection
     public static final ForgeConfigSpec.BooleanValue BLOCK_CC_IN_VAULT;
@@ -18,6 +22,16 @@ public class ModConfig {
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_HISTORY_RESULTS;
 
     static {
+        ForgeConfigSpec.Builder clientBuilder = new ForgeConfigSpec.Builder();
+
+        clientBuilder.comment("Client-side helpers").push("artifactProjector");
+        ARTIFACT_PROJECTOR_AUTOFILL_ENABLED = clientBuilder
+                .comment("When enabled, right-clicking your own incomplete Vault artifact projector will batch-place any matching artifacts from your inventory using normal client interactions.")
+                .define("autofillEnabled", true);
+        clientBuilder.pop();
+
+        CLIENT_SPEC = clientBuilder.build();
+
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
         builder.comment("Vault Dimension Protection").push("vault");

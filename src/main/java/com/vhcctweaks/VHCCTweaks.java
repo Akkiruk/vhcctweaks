@@ -33,6 +33,7 @@ public class VHCCTweaks {
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
 
     public VHCCTweaks() {
+        ModLoadingContext.get().registerConfig(Type.CLIENT, ModConfig.CLIENT_SPEC);
         ModLoadingContext.get().registerConfig(Type.SERVER, ModConfig.SERVER_SPEC);
 
         // Vault dimension protection (blocks all CC blocks/items in vaults)

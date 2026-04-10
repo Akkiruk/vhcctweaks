@@ -18,8 +18,7 @@ import java.util.regex.Pattern;
  * Patches Vault Hunters config JSON files on startup for vhcctweaks-managed entries.
  * This ensures:
  * - computercraft:* is in the vault item/block blacklists
- * - Advanced Peripherals stays in the Vault research tree
- * - legacy CC:Tweaked research entries injected by older versions are removed
+* - legacy CC:Tweaked and Advanced Peripherals research entries injected by older versions are removed
  */
 public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -142,29 +141,9 @@ public class VaultConfigPatcher {
             VHCCTweaks.LOGGER.info("Removed legacy '{}' research entry", CC_RESEARCH);
         }
 
-        // Add Advanced Peripherals research gate
-        if (!hasResearchNamed(researches, AP_RESEARCH)) {
-            JsonObject apResearch = new JsonObject();
-            JsonArray apModIds = new JsonArray();
-            apModIds.add("advancedperipherals");
-            apResearch.add("modIds", apModIds);
-
-            JsonObject apRestrictions = new JsonObject();
-            JsonObject apRestricts = new JsonObject();
-            apRestricts.addProperty("HITTABILITY", false);
-            apRestricts.addProperty("BLOCK_INTERACTABILITY", true);
-            apRestricts.addProperty("USABILITY", true);
-            apRestricts.addProperty("CRAFTABILITY", true);
-            apRestricts.addProperty("ENTITY_INTERACTABILITY", false);
-            apRestrictions.add("restricts", apRestricts);
-            apResearch.add("restrictions", apRestrictions);
-
-            apResearch.addProperty("name", AP_RESEARCH);
-            apResearch.addProperty("cost", 2);
-            apResearch.addProperty("usesKnowledge", true);
-            researches.add(apResearch);
+        if (removeResearchNamed(researches, AP_RESEARCH)) {
             changed = true;
-            VHCCTweaks.LOGGER.info("Added '{}' research (cost 2)", AP_RESEARCH);
+            VHCCTweaks.LOGGER.info("Removed legacy '{}' research entry", AP_RESEARCH);
         }
 
         if (changed) {
@@ -198,28 +177,9 @@ public class VaultConfigPatcher {
                 changed = true;
                 VHCCTweaks.LOGGER.info("Removed legacy '{}' from {} research group", CC_RESEARCH, groupName);
             }
-        }
-
-        if (groups.has("Addons")) {
-            JsonObject addons = groups.getAsJsonObject("Addons");
-            if (addons.has("research")) {
-                JsonArray addonResearch = addons.getAsJsonArray("research");
-                if (!arrayContains(addonResearch, AP_RESEARCH)) {
-                    addonResearch.add(AP_RESEARCH);
-                    changed = true;
-                    VHCCTweaks.LOGGER.info("Added '{}' to Addons research group", AP_RESEARCH);
-                }
-            }
-        }
-
-        if (groups.has("Handling")) {
-            JsonObject handling = groups.getAsJsonObject("Handling");
-            if (handling.has("research")) {
-                JsonArray handlingResearch = handling.getAsJsonArray("research");
-                if (removeString(handlingResearch, AP_RESEARCH)) {
-                    changed = true;
-                    VHCCTweaks.LOGGER.info("Removed '{}' from Handling research group", AP_RESEARCH);
-                }
+            if (removeString(researchArray, AP_RESEARCH)) {
+                changed = true;
+                VHCCTweaks.LOGGER.info("Removed legacy '{}' from {} research group", AP_RESEARCH, groupName);
             }
         }
 
@@ -248,50 +208,14 @@ public class VaultConfigPatcher {
             guiChanged = true;
             VHCCTweaks.LOGGER.info("Removed legacy '{}' GUI style", CC_RESEARCH);
         }
-        guiChanged |= ensureResearchStyle(styles, AP_RESEARCH, 630, 40, "the_vault:gui/researches/advanced_peripherals");
+        if (styles.remove(AP_RESEARCH) != null) {
+            guiChanged = true;
+            VHCCTweaks.LOGGER.info("Removed legacy '{}' GUI style", AP_RESEARCH);
+        }
 
         if (guiChanged) {
             Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
-    }
-
-    private static boolean ensureResearchStyle(JsonObject styles, String researchName, int x, int y, String icon) {
-        JsonObject style = styles.has(researchName) && styles.get(researchName).isJsonObject()
-                ? styles.getAsJsonObject(researchName)
-                : new JsonObject();
-        boolean changed = false;
-
-        changed |= setIntProperty(style, "x", x);
-        changed |= setIntProperty(style, "y", y);
-        changed |= setStringProperty(style, "frameType", "RECTANGULAR");
-        changed |= setStringProperty(style, "icon", icon);
-
-        if (!styles.has(researchName) || styles.get(researchName) != style) {
-            styles.add(researchName, style);
-            changed = true;
-        }
-
-        if (changed) {
-            VHCCTweaks.LOGGER.info("Positioned '{}' research in Addons at {},{}", researchName, x, y);
-        }
-
-        return changed;
-    }
-
-    private static boolean setIntProperty(JsonObject object, String key, int value) {
-        if (object.has(key) && object.get(key).isJsonPrimitive() && object.get(key).getAsInt() == value) {
-            return false;
-        }
-        object.addProperty(key, value);
-        return true;
-    }
-
-    private static boolean setStringProperty(JsonObject object, String key, String value) {
-        if (object.has(key) && object.get(key).isJsonPrimitive() && value.equals(object.get(key).getAsString())) {
-            return false;
-        }
-        object.addProperty(key, value);
-        return true;
     }
 
     private static boolean removeString(JsonArray array, String value) {
@@ -325,126 +249,9 @@ public class VaultConfigPatcher {
             VHCCTweaks.LOGGER.info("Removed legacy '{}' description from skill_descriptions.json", CC_RESEARCH);
         }
 
-        if (!descriptions.has("Advanced Peripherals")) {
-            JsonArray apDesc = new JsonArray();
-
-            JsonObject ap1 = new JsonObject();
-            ap1.addProperty("text", "Unlocks the ");
-            apDesc.add(ap1);
-
-            JsonObject ap2 = new JsonObject();
-            ap2.addProperty("text", "Advanced Peripherals ");
-            ap2.addProperty("color", "yellow");
-            apDesc.add(ap2);
-
-            JsonObject ap3 = new JsonObject();
-            ap3.addProperty("text", "mod!\n\nThis mod adds powerful peripheral blocks for ");
-            apDesc.add(ap3);
-
-            JsonObject ap4 = new JsonObject();
-            ap4.addProperty("text", "CC: Tweaked");
-            ap4.addProperty("color", "aqua");
-            apDesc.add(ap4);
-
-            JsonObject ap5 = new JsonObject();
-            ap5.addProperty("text", "! Build player detectors, environment scanners, " +
-                    "chat boxes, energy monitors, redstone integrators and more. " +
-                    "Several AP features have been ");
-            apDesc.add(ap5);
-
-            JsonObject ap6 = new JsonObject();
-            ap6.addProperty("text", "disabled");
-            ap6.addProperty("color", "gold");
-            apDesc.add(ap6);
-
-            JsonObject ap7 = new JsonObject();
-            ap7.addProperty("text", " for balance: ");
-            apDesc.add(ap7);
-
-            JsonObject ap8 = new JsonObject();
-            ap8.addProperty("text", "chunk loading");
-            ap8.addProperty("color", "gold");
-            apDesc.add(ap8);
-
-            JsonObject ap9 = new JsonObject();
-            ap9.addProperty("text", ", ");
-            apDesc.add(ap9);
-
-            JsonObject ap10 = new JsonObject();
-            ap10.addProperty("text", "ore scanning");
-            ap10.addProperty("color", "gold");
-            apDesc.add(ap10);
-
-            JsonObject ap10b = new JsonObject();
-            ap10b.addProperty("text", ", ");
-            apDesc.add(ap10b);
-
-            JsonObject ap10c = new JsonObject();
-            ap10c.addProperty("text", "block reading");
-            ap10c.addProperty("color", "gold");
-            apDesc.add(ap10c);
-
-            JsonObject ap10d = new JsonObject();
-            ap10d.addProperty("text", ", ");
-            apDesc.add(ap10d);
-
-            JsonObject ap10e = new JsonObject();
-            ap10e.addProperty("text", "inventory management");
-            ap10e.addProperty("color", "gold");
-            apDesc.add(ap10e);
-
-            JsonObject ap11 = new JsonObject();
-            ap11.addProperty("text", ", ");
-            apDesc.add(ap11);
-
-            JsonObject ap12 = new JsonObject();
-            ap12.addProperty("text", "teleportation");
-            ap12.addProperty("color", "gold");
-            apDesc.add(ap12);
-
-            JsonObject ap12b = new JsonObject();
-            ap12b.addProperty("text", ", ");
-            apDesc.add(ap12b);
-
-            JsonObject ap12c = new JsonObject();
-            ap12c.addProperty("text", "animal capture");
-            ap12c.addProperty("color", "gold");
-            apDesc.add(ap12c);
-
-            JsonObject ap12d = new JsonObject();
-            ap12d.addProperty("text", " and ");
-            apDesc.add(ap12d);
-
-            JsonObject ap12e = new JsonObject();
-            ap12e.addProperty("text", "message spoofing");
-            ap12e.addProperty("color", "gold");
-            apDesc.add(ap12e);
-
-            JsonObject ap13 = new JsonObject();
-            ap13.addProperty("text", ". Slime chunk detection is ");
-            apDesc.add(ap13);
-
-            JsonObject ap14 = new JsonObject();
-            ap14.addProperty("text", "blocked");
-            ap14.addProperty("color", "gold");
-            apDesc.add(ap14);
-
-            JsonObject ap15 = new JsonObject();
-            ap15.addProperty("text", " to protect the world seed. Overpowered automata have an increased ");
-            apDesc.add(ap15);
-
-            JsonObject ap16 = new JsonObject();
-            ap16.addProperty("text", "break chance");
-            ap16.addProperty("color", "gold");
-            apDesc.add(ap16);
-
-            JsonObject ap17 = new JsonObject();
-            ap17.addProperty("text", ". AP items cannot be brought into the vaults.");
-            apDesc.add(ap17);
-
-            descriptions.add("Advanced Peripherals", apDesc);
+        if (descriptions.remove(AP_RESEARCH) != null) {
             descChanged = true;
-            VHCCTweaks.LOGGER.info("Added 'Advanced Peripherals' description to skill_descriptions.json");
+            VHCCTweaks.LOGGER.info("Removed legacy '{}' description from skill_descriptions.json", AP_RESEARCH);
         }
 
         if (descChanged) {
@@ -651,18 +458,6 @@ public class VaultConfigPatcher {
         for (JsonElement el : array) {
             if (el.isJsonPrimitive() && el.getAsString().equals(value)) {
                 return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean hasResearchNamed(JsonArray researches, String name) {
-        for (JsonElement el : researches) {
-            if (el.isJsonObject()) {
-                JsonObject obj = el.getAsJsonObject();
-                if (obj.has("name") && obj.get("name").getAsString().equals(name)) {
-                    return true;
-                }
             }
         }
         return false;

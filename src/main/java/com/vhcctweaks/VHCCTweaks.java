@@ -46,8 +46,8 @@ public class VHCCTweaks {
         // Command registration and server start events
         MinecraftForge.EVENT_BUS.register(VHCCTweaks.class);
 
-        // Patch VH config files early (adds blacklist entries, maintains AP research,
-        // and removes the legacy CC research injection)
+        // Patch VH config files early (adds blacklist entries and removes the legacy
+        // CC/AP research injections)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
         // Patch CC:Tweaked monitor sizes and sync managed CraftTweaker scripts for both
         // integrated and dedicated-server folder layouts.

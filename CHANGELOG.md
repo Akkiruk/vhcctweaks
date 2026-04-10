@@ -4,7 +4,7 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Removed the `Advanced Peripherals` Vault research injection so startup cleanup now strips both legacy CC and AP research entries, GUI styles, and skill descriptions.
 
 ## [2.2.22] - 2026-04-09
 

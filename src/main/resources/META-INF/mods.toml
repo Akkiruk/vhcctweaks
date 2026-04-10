@@ -10,7 +10,7 @@ license="MIT"
 Balances CC:Tweaked and Advanced Peripherals for Vault Hunters 3rd Edition.
 
 Core Features:
-- Advanced Peripherals research gate in the VH skill tree
+- Removes legacy CC:Tweaked and Advanced Peripherals research entries from the VH skill tree
 - All CC and AP blocks/items blocked inside the Vault dimension
 - 20 recipe overrides requiring Chromatic Iron/Steel from vaults
 - Wireless modem range reduced, command computers disabled

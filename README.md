@@ -22,11 +22,10 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 
 ## Features
 
-### Advanced Peripherals Research Gate
-- Adds **Advanced Peripherals** as a separate research in the VH **Addons** group
-- Costs **2 Knowledge Stars** and gates crafting, placement, and interaction
-- Custom icon and styled description appear in the VH research GUI
-- Research entry is auto-injected into VH config files on first launch
+### Vault Research Cleanup
+- Removes legacy **CC: Tweaked** and **Advanced Peripherals** research entries from Vault config JSON on startup
+- Cleans previously injected research-group entries, GUI styles, and skill descriptions so old installs self-heal
+- Keeps CC/AP progression controlled through recipe changes, vault protection, and AP config restrictions instead of extra VH research nodes
 
 ### Vault Dimension Protection
 - Blocks **placement**, **interaction**, **use**, **mining**, and **breaking** of all CC:Tweaked and Advanced Peripherals blocks inside vaults
@@ -161,7 +160,7 @@ A comprehensive Lua test suite is included (`vhcctweaks_test.lua`) with validati
 4. sendFormattedMessage blocked
 5. AP disabled peripherals (config)
 6. Recipe overrides (manual JEI check)
-7. AP research entry
+7. Legacy CC/AP research cleanup
 8. Allowed features verification
 Run it on a CC computer or turtle in-game. Results are saved to both the CC filesystem and the real filesystem via the `vhcc` API.
 

@@ -4,8 +4,11 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- Removed the `Advanced Peripherals` Vault research injection so startup cleanup now strips both legacy CC and AP research entries, GUI styles, and skill descriptions.
+- No changes yet.
 
+## [2.2.23] - 2026-04-10
+
+- Removed the `Advanced Peripherals` Vault research injection so startup cleanup now strips both legacy CC and AP research entries, GUI styles, and skill descriptions.
 ## [2.2.22] - 2026-04-09
 
 - Removed the artifact projector autofill helper from vhcctweaks; it now lives in a separate standalone mod.

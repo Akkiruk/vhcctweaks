@@ -153,13 +153,6 @@ craftingTable.addShaped("vhcc_me_bridge", <item:advancedperipherals:me_bridge>, 
     [<item:ae2:fluix_block>, perfectLar, <item:ae2:fluix_block>]
 ]);
 
-// RS Bridge — Refined Storage integration
-craftingTable.addShaped("vhcc_rs_bridge", <item:advancedperipherals:rs_bridge>, [
-    [<item:refinedstorage:quartz_enriched_iron>, chrSteel, <item:refinedstorage:quartz_enriched_iron>],
-    [<item:refinedstorage:interface>, casing, <item:refinedstorage:interface>],
-    [<item:refinedstorage:quartz_enriched_iron>, perfectLar, <item:refinedstorage:quartz_enriched_iron>]
-]);
-
 // ============================================================
 //  AUTOMATA CORES — Chromatic Steel + Vault Diamond (highest tier)
 // ============================================================

@@ -46,17 +46,25 @@ import java.util.stream.Collectors;
  */
 public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
 
+    private static final Set<String> VAULT_NAMESPACES = Set.of("the_vault", "woldsvaults", "vaultadditions");
+    private static final int MAX_RAW_NBT_CHARS = 32 * 1024;
+
     @Override
     public void provideDetails(@Nonnull Map<? super String, Object> data, @Nonnull ItemStack stack) {
         if (stack.isEmpty()) return;
 
-        // Fast namespace check — skip all non-VH items without any reflection or instanceof
+        // Fast namespace check — addon mods add their own gear and trinkets on top of Vault's
         ResourceLocation itemId = stack.getItem().getRegistryName();
-        if (itemId == null || !"the_vault".equals(itemId.getNamespace())) return;
+        if (itemId == null || !VAULT_NAMESPACES.contains(itemId.getNamespace())) return;
 
         try {
             Map<String, Object> vaultData = buildVaultData(stack);
             if (vaultData != null) {
+                // Anything without a parser here is still readable from Lua, and stays so after Vault changes
+                if (stack.hasTag()) {
+                    String nbt = stack.getTag().toString();
+                    if (nbt.length() <= MAX_RAW_NBT_CHARS) vaultData.put("rawNbt", nbt);
+                }
                 data.put("vaultData", vaultData);
             }
         } catch (Exception ignored) {
@@ -83,12 +91,10 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         if (item instanceof CardItem)             return parseCard(stack);
         if (item instanceof AugmentItem)          return parseAugment(stack);
 
-        // Check if any VH item with AttributeGearData on it (fallback)
+        // Everything else that carries data: attributes if it has them, and always its raw NBT
         ResourceLocation regName = item.getRegistryName();
-        if (regName != null && "the_vault".equals(regName.getNamespace())) {
-            if (AttributeGearData.hasData(stack)) {
-                return parseGenericVaultItem(stack, regName);
-            }
+        if (regName != null && (stack.hasTag() || AttributeGearData.hasData(stack))) {
+            return parseGenericVaultItem(stack, regName);
         }
 
         return null;
@@ -304,74 +310,41 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
             // Extract what we safely can from the crystal data
             // CrystalData uses a complex nested structure; we record the NBT-level info
             crystalData.writeNbt().ifPresent(nbt -> {
-                // Objective
-                if (nbt.contains("objective")) {
-                    var objTag = nbt.getCompound("objective");
-                    if (objTag.contains("type")) {
-                        crystal.put("objective", objTag.getString("type"));
-                    }
+                var objective = nbt.getCompound("Objective");
+                if (objective.contains("type")) crystal.put("objective", objective.getString("type"));
+
+                var theme = nbt.getCompound("Theme");
+                if (theme.contains("type")) crystal.put("theme", theme.getString("type"));
+                if (theme.contains("id")) crystal.put("themeId", theme.getString("id"));
+
+                var layout = nbt.getCompound("Layout");
+                if (layout.contains("type")) crystal.put("layout", layout.getString("type"));
+
+                var time = nbt.getCompound("Time");
+                if (time.contains("type")) crystal.put("timeType", time.getString("type"));
+
+                var modifiers = nbt.getCompound("Modifiers");
+                if (modifiers.contains("type")) crystal.put("modifierType", modifiers.getString("type"));
+                if (modifiers.contains("Clarity")) crystal.put("clarity", modifiers.getBoolean("Clarity"));
+                var entries = modifiers.getList("List", 10); // CompoundTag list
+                List<Map<String, Object>> modList = new ArrayList<>();
+                for (int i = 0; i < entries.size(); i++) {
+                    var entry = entries.getCompound(i);
+                    Map<String, Object> mod = new LinkedHashMap<>();
+                    if (entry.contains("id")) mod.put("id", entry.getString("id"));
+                    if (entry.contains("size")) mod.put("count", entry.getInt("size"));
+                    modList.add(mod);
                 }
-                // Theme
-                if (nbt.contains("theme")) {
-                    var themeTag = nbt.getCompound("theme");
-                    if (themeTag.contains("type")) {
-                        crystal.put("theme", themeTag.getString("type"));
-                    }
-                    if (themeTag.contains("id")) {
-                        crystal.put("themeId", themeTag.getString("id"));
-                    }
-                }
-                // Layout
-                if (nbt.contains("layout")) {
-                    var layoutTag = nbt.getCompound("layout");
-                    if (layoutTag.contains("type")) {
-                        crystal.put("layout", layoutTag.getString("type"));
-                    }
-                }
-                // Time
-                if (nbt.contains("time")) {
-                    var timeTag = nbt.getCompound("time");
-                    if (timeTag.contains("type")) {
-                        crystal.put("timeType", timeTag.getString("type"));
-                    }
-                    if (timeTag.contains("value")) {
-                        crystal.put("time", timeTag.getInt("value"));
-                    }
-                }
-                // Modifiers
-                if (nbt.contains("modifiers")) {
-                    var modsTag = nbt.getCompound("modifiers");
-                    if (modsTag.contains("type")) {
-                        crystal.put("modifierType", modsTag.getString("type"));
-                    }
-                    // Extract modifier list if present
-                    if (modsTag.contains("entries")) {
-                        var entriesTag = modsTag.getList("entries", 10); // CompoundTag list
-                        List<Map<String, Object>> modList = new ArrayList<>();
-                        for (int i = 0; i < entriesTag.size(); i++) {
-                            var entryTag = entriesTag.getCompound(i);
-                            Map<String, Object> mod = new LinkedHashMap<>();
-                            if (entryTag.contains("id")) mod.put("id", entryTag.getString("id"));
-                            if (entryTag.contains("count")) mod.put("count", entryTag.getInt("count"));
-                            modList.add(mod);
-                        }
-                        if (!modList.isEmpty()) crystal.put("modifiers", modList);
-                    }
-                }
-                // Properties (instability, capacity)
-                if (nbt.contains("properties")) {
-                    var propsTag = nbt.getCompound("properties");
-                    if (propsTag.contains("instability")) {
-                        crystal.put("instability", propsTag.getFloat("instability"));
-                    }
-                    if (propsTag.contains("capacity")) {
-                        crystal.put("capacity", propsTag.getInt("capacity"));
-                    }
-                }
-                // Level
-                if (nbt.contains("level")) {
-                    crystal.put("level", nbt.getInt("level"));
-                }
+                if (!modList.isEmpty()) crystal.put("modifiers", modList);
+
+                var properties = nbt.getCompound("Properties");
+                if (properties.contains("level")) crystal.put("level", properties.getInt("level"));
+                if (properties.contains("instability")) crystal.put("instability", properties.getFloat("instability"));
+                if (properties.contains("size")) crystal.put("capacity", properties.getInt("size"));
+                if (properties.contains("volume")) crystal.put("volume", properties.getInt("volume"));
+                if (properties.contains("exhausted")) crystal.put("exhausted", properties.getBoolean("exhausted"));
+
+                if (nbt.contains("Sigil")) crystal.put("sigil", nbt.getString("Sigil"));
             });
         } catch (Exception ignored) {
             // Crystal data might not be parseable; return basic type info
@@ -452,6 +425,11 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
 
         if (data.getState() == VaultGearState.IDENTIFIED) {
             etching.put("identified", true);
+            List<Map<String, Object>> attributes = new ArrayList<>();
+            data.getAllAttributes().forEach(instance -> {
+                if (!isSkippedAttribute(instance)) attributes.add(VaultModifierHelper.parseAttributeInstance(stack, instance, data));
+            });
+            if (!attributes.isEmpty()) etching.put("attributes", attributes);
             etching.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT));
             etching.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX));
             etching.put("suffixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.SUFFIX));

@@ -4,7 +4,22 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Moved `ccvault` from the removed PlayerShops `VaultTokenAPI` to the ParadiseCore economy. On the current pack the old class no longer exists, so `ccvault.isAvailable()` was false and every transfer failed.
+- Transfers now use the economy's single database transaction instead of a separate debit and credit. New transfers write no WAL intents; intents left by older versions are still recovered at startup.
+- `ccvault.enabled` now actually turns the API off.
+- Added `/vhcc pc` remote control for the client debug tool: read terminals and monitors, send input, manage files and run code. Allowed for the singleplayer owner and for players named in `remoteControl.allowedPlayers`, and nobody else. Set `remoteControl.enabled` to false to turn it off. Every call is audited to `vhcc_data/remote/audit.log`, and the server log states the setting at every startup.
+- A remotely controlled computer refuses CCVault transfers for anyone but the controller until it reboots.
+- Added `vhcc.rcReply`, which the Roger supervisor uses to answer remote code requests.
+- Closed a hole in the `vhcc` file API: scripts could write the mod's own `ccvault` records, including a forged WAL intent that would mint tokens at the next restart. `ccvault` and `remote` are now reserved.
+- Added the `vhcc_touch` event, which names the player behind each monitor touch.
+- Sessions are now per player per computer, and `getBalance` and `transfer` accept `"player:Name"` for a named player at the table. One player approving no longer ends another's session.
+- Added `ccvault.setTerminalLock` and `ccvault.isTerminalLocked` for owner-only computers.
+- Added `/vhcc pc <seq> ledger <player> <limit>`, `peripherals <id>`, `monitorof <id> <side>` and `serverlog <lines>` for admins. `serverlog` returns only lines about computers or this mod.
+- Fixed `vaultData` for crystals: it read lowercase NBT keys the game has never written, so crystals only ever returned `itemType`.
+- `vaultData` now covers items in the `woldsvaults` and `vaultadditions` namespaces, and every item with data includes `rawNbt`, so Lua can read fields this mod has no parser for. Wold's gear registers under `the_vault` and already worked. Etchings report their attributes, including the greed tier.
+- Removed the RS Bridge recipe, matching the server's build: Refined Storage is not in the pack.
+- Builds are always UTF-8, so Windows builds no longer mangle em dashes in Lua-facing messages.
+- Deploy helper and docs point at the `Vaulters-Paradise` instance.
 
 ## [2.2.23] - 2026-04-10
 

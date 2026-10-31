@@ -15,17 +15,11 @@ import java.security.SecureRandom;
 import java.util.UUID;
 
 /**
- * Executes transfers using a Write-Ahead Log (WAL) for crash safety.
+ * Executes transfers through the ParadiseCore economy, which applies them atomically.
  *
- * Flow:
- * 1. Write intent file: {txId, from, to, amount, status=PENDING}
- * 2. Call DogBridge.remove(from, amount)
- * 3. Update intent file: status=DEBITED
- * 4. Call DogBridge.add(to, amount)
- * 5. Delete intent file (transfer complete)
- * 6. Log to TransactionLedger
- *
- * On server start, recover() scans for incomplete intents:
+ * Older versions debited and credited separately and kept a Write-Ahead Log (WAL) to finish a
+ * transfer cut off between the two. New transfers write no intents, but recover() still runs at
+ * server start so any intent left behind by those versions is finished:
  *   PENDING  → nothing happened yet, delete the file
  *   DEBITED  → debit happened but credit didn't, complete the credit
  *   CREDITED → credit already happened, just clean up the file
@@ -82,14 +76,14 @@ public class TransferService {
                     VHCCTweaks.LOGGER.warn("CCVault: WAL recovery — completing DEBITED tx {} (crediting {} to {})",
                             intent.txId, intent.amount, intent.toUuid);
                     UUID toUuid = UUID.fromString(intent.toUuid);
-                    if (DogBridge.add(toUuid, intent.amount)) {
+                    if (EconomyBridge.add(toUuid, intent.amount)) {
                         intent.status = "CREDITED";
                         writeIntent(intent);
                         logTransferIfMissing(intent);
                         VHCCTweaks.LOGGER.info("CCVault: WAL recovery — tx {} completed successfully", intent.txId);
                         BalanceNotifier.notifyCredit(toUuid, intent.amount, "recovery: " + intent.reason);
                     } else {
-                        // Dog API not yet available (server still starting?) — leave file for next restart
+                        // Economy not yet available (server still starting?) — leave file for next restart
                         VHCCTweaks.LOGGER.error("CCVault: WAL recovery — FAILED to credit tx {}! File kept for retry.", intent.txId);
                         return; // Don't delete the file
                     }
@@ -131,13 +125,13 @@ public class TransferService {
             return TransferResult.fail("amount exceeds maximum (" + maxAmount + ")");
         }
 
-        // Check Dog API availability
-        if (!DogBridge.isAvailable()) {
+        // Check the economy is up
+        if (!EconomyBridge.isAvailable()) {
             return TransferResult.fail("economy system not available");
         }
 
         // Check source has enough balance
-        long sourceBalance = DogBridge.getBalance(fromUuid);
+        long sourceBalance = EconomyBridge.getBalance(fromUuid);
         if (sourceBalance < 0) {
             return TransferResult.fail("could not read source balance");
         }
@@ -145,66 +139,20 @@ public class TransferService {
             return TransferResult.fail("insufficient balance");
         }
 
-        // Generate transaction ID
         String txId = generateTxId();
 
-        // Step 1: Write PENDING intent to WAL
-        TransferIntent intent = new TransferIntent(txId, fromUuid.toString(), toUuid.toString(),
-            amount, reason, "PENDING", computerId,
-            playerUuid.toString(), hostUuid != null ? hostUuid.toString() : null);
-        if (!writeIntent(intent)) {
-            return TransferResult.fail("internal error: could not write transaction intent");
-        }
-
-        // Step 2: Debit source
-        if (!DogBridge.remove(fromUuid, amount)) {
-            deleteIntent(txId);
+        // The economy moves both balances in one transaction, so there is no half-done state to recover from
+        if (!EconomyBridge.transfer(fromUuid, toUuid, amount)) {
             TransactionLedger.logRejection(txId, fromUuid, toUuid, amount, reason, computerId,
-                    playerUuid, "debit failed");
-            return TransferResult.fail("debit failed");
+                    playerUuid, "economy refused the transfer");
+            return TransferResult.fail("transfer failed");
         }
 
-        // Step 3: Update intent to DEBITED — this MUST succeed so recovery knows the debit happened
-        intent.status = "DEBITED";
-        if (!writeIntent(intent)) {
-            // Can't record the debit — reverse it immediately to prevent token loss
-            VHCCTweaks.LOGGER.error("CCVault: tx {} — could not write DEBITED status! Reversing debit.", txId);
-            DogBridge.add(fromUuid, amount);
-            deleteIntent(txId);
-            return TransferResult.fail("internal error: transfer reversed (could not update WAL)");
-        }
-
-        // Step 4: Credit destination
-        if (!DogBridge.add(toUuid, amount)) {
-            // Credit failed but debit happened — the WAL file with DEBITED status ensures recovery
-            VHCCTweaks.LOGGER.error("CCVault: tx {} — credit failed after debit! WAL will recover on restart.", txId);
-            TransactionLedger.logRejection(txId, fromUuid, toUuid, amount, reason, computerId,
-                    playerUuid, "credit failed after debit — WAL pending recovery");
-            return TransferResult.fail("transfer partially failed — will be recovered automatically");
-        }
-
-        // Step 5: Mark as CREDITED (prevents double-credit if crash before WAL deletion)
-        intent.status = "CREDITED";
-        if (!writeIntent(intent)) {
-            VHCCTweaks.LOGGER.error("CCVault: tx {} — could not write CREDITED status. Deleting WAL to avoid duplicate recovery.", txId);
-            deleteIntent(txId);
-        }
-
-        // Step 6: Log to ledger
         TransactionLedger.logTransfer(txId, fromUuid, toUuid, amount, reason, computerId,
                 playerUuid, hostUuid);
 
-        // Step 7: Delete WAL file (transfer complete)
-        deleteIntent(txId);
-
-        // Step 8: Notify players via chat
-        // Self-play (player == host): transfers are net-zero, suppress confusing +/- notifications
-        if (!fromUuid.equals(toUuid)) {
-            BalanceNotifier.notifyDebit(fromUuid, amount, reason);
-            BalanceNotifier.notifyCredit(toUuid, amount, reason);
-        }
-        // Self-play transfers are silent — the escrow hold/refund notifications
-        // already track the meaningful balance changes
+        BalanceNotifier.notifyDebit(fromUuid, amount, reason);
+        BalanceNotifier.notifyCredit(toUuid, amount, reason);
 
         return TransferResult.success(txId);
     }
@@ -222,15 +170,6 @@ public class TransferService {
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to write WAL intent {}", intent.txId, e);
             return false;
-        }
-    }
-
-    private static void deleteIntent(String txId) {
-        if (walDir == null) return;
-        try {
-            Files.deleteIfExists(walDir.resolve(txId + ".json"));
-        } catch (IOException e) {
-            VHCCTweaks.LOGGER.warn("CCVault: Failed to delete WAL intent {} (harmless — recovery will clean up)", txId, e);
         }
     }
 

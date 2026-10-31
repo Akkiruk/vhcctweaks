@@ -51,14 +51,14 @@ All CC:Tweaked and AP crafting recipes are replaced with Vault-tier materials us
 | Basic | Chromatic Iron + Larimar | Computer, Monitor, Speaker, Printer, Disk Drive, Wired Modem, Wireless Modem, Cable (6x), Turtle, Pocket Computer, Floppy Disk, Printed Page/Pages/Book, Wired Modem Full conversions |
 | Advanced | Chromatic Steel + Perfect Larimar | Advanced Computer (direct + upgrade), Advanced Monitor, Advanced Wireless Modem, Advanced Turtle (direct + upgrade), Advanced Pocket Computer (direct + upgrade) |
 
-**Advanced Peripherals (20 recipes - `scripts/AdvancedPeripherals.zs`)**
+**Advanced Peripherals (19 recipes - `scripts/AdvancedPeripherals.zs`)**
 | Tier | Material | Items |
 |------|----------|-------|
 | Base | Iron + Chromatic Iron | Peripheral Casing |
 | Basic | Chromatic Iron + Larimar | Chat Box, Player Detector, Redstone Integrator, Environment Detector, Computer Tool, AR Goggles, Memory Card |
 | Mid | Chromatic Iron + Perfect Larimar | Inventory Manager, NBT Storage, AR Controller |
 | Powerful | Chromatic Steel + Perfect Larimar | Energy Detector, Block Reader, Geo Scanner, Chunk Controller |
-| Bridges | Chromatic Steel + Mod Components | ME Bridge (AE2), RS Bridge (Refined Storage) |
+| Bridges | Chromatic Steel + Mod Components | ME Bridge (AE2) |
 | Automata | Chromatic Steel + Vault Diamond | Weak Automata Core, Overpowered Weak/End/Husbandry Automata Cores |
 
 ### Network Configuration
@@ -100,7 +100,7 @@ vhcc.isAvailable(), vhcc.getBasePath()
 **Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16-level depth limit, allowlist character set.
 
 ### CCVault Economy API (`ccvault`)
-A server-authoritative economy API that lets CC:Tweaked computers move **Vault Tokens** (from [Dog's PlayerShops](https://modrinth.com/mod/dogs-playershops)) between players. Designed for in-game shops, casinos, and trading terminals.
+A server-authoritative economy API that lets CC:Tweaked computers move **Vault Tokens** (from the ParadiseCore economy) between players. Designed for in-game shops, casinos, and trading terminals.
 
 **Core concepts:**
 - **`"player"`** - the person currently using the terminal (right-clicked it)
@@ -191,7 +191,7 @@ src/main/java/com/vhcctweaks/
 |-- api/VHCCTweaksAPI.java               # Lua filesystem API (sandboxed)
 |-- ccvault/
 |   |-- CCVaultAPI.java                  # Lua economy API (ccvault global)
-|   |-- DogBridge.java                   # Dog's PlayerShops integration
+|   |-- EconomyBridge.java               # ParadiseCore economy integration
 |   |-- RateLimiter.java                 # Per-terminal & per-player rate limits
 |   |-- SessionAuthManager.java          # Click-to-approve auth sessions
 |   |-- TransactionLedger.java           # Double-entry transaction log

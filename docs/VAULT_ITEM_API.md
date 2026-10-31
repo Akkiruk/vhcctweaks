@@ -10,6 +10,7 @@
 The Vault Item Detail API automatically enriches CC:Tweaked's `getItemDetail()` with comprehensive Vault Hunters item data. **No special block or peripheral is required** — it works with any inventory (chests, barrels, shulker boxes, modded inventories, turtle inventories, etc.).
 
 When you call `getItemDetail()` on a slot containing a VH item, the returned table will include a `vaultData` key with all the item's VH-specific data — gear modifiers, trinket effects, crystal objectives, jewel stats, and more.
+nEvery item with data also has `rawNbt`, its full NBT as text (up to 32 KB). Use it for anything `vaultData` has no field for. Items in the `woldsvaults` and `vaultadditions` namespaces are covered too. Wold's gear uses `the_vault` IDs, such as `the_vault:battlestaff`, and reads as normal gear.
 
 ---
 

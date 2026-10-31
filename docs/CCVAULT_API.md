@@ -5,6 +5,12 @@
 
 ---
 
+## New in 2.2.24
+
+- `vhcc_touch` event: `local _, playerName = os.pullEvent("vhcc_touch")`. It arrives immediately before the `monitor_touch` from that player's touch on an adjacent monitor.
+- `"player:Name"` target for `getBalance` and `transfer`: a named player at this table. They must be online, have approved this computer, and have touched it within the staleness window. Several players can hold sessions on one computer at once. `"player"` still means whoever touched last.
+- `ccvault.setTerminalLock(locked)`, `ccvault.isTerminalLocked()`: the owner can make the terminal and block owner-only. Monitors still work for everyone, and server admins always get in.
+
 ## Overview
 
 CCVault lets ComputerCraft scripts move **Vault Tokens** between two parties:
@@ -70,7 +76,7 @@ end
 |----------|---------|:---:|
 | `ccvault.isAvailable()` | `boolean` | No |
 
-Returns `true` if Dog's PlayerShops is loaded and the economy system is active.
+Returns `true` if ParadiseCore is loaded and its economy is active.
 
 ---
 
@@ -302,7 +308,8 @@ end
 | `amount exceeds maximum (1000000)` | Over the per-transfer cap |
 | `terminal rate limit exceeded` | Too many transfers from this computer (default: 10/min) |
 | `player rate limit exceeded` | Player making too many transfers (default: 20/min) |
-| `economy system not available` | PlayerShops not installed |
+| `economy system not available` | ParadiseCore not installed, or its database is down |
+| `this computer was remotely controlled - reboot it before moving tokens` | An admin drove this computer through `/vhcc pc`; a reboot clears it |
 | `transfer partially failed — will be recovered automatically` | Server crashed mid-transfer; WAL will fix it on restart |
 
 ---

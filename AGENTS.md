@@ -5,7 +5,7 @@
 - This repo is the source of truth for the `vhcctweaks` Forge mod.
 - Primary branch: `master`
 - Target stack: Java 17, Minecraft 1.18.2, Forge 40.3.11
-- Runtime target: `%APPDATA%\PrismLauncher\instances\Vault Paradise\minecraft\`
+- Runtime target: `%APPDATA%\PrismLauncher\instances\Vaulters-Paradise\minecraft\`
 
 ## Project Layout
 
@@ -31,7 +31,7 @@
 - Optional Advanced Peripherals mixins should keep using string targets so they no-op cleanly when AP is absent.
 - Config patching must stay idempotent.
 - Security-sensitive APIs should validate inputs server-side and keep side effects crash-safe.
-- Keep the local runtime integration aligned with the Vault Paradise instance paths in this repo and the PrismLauncher instance.
+- Keep the local runtime integration aligned with the Vaulters-Paradise instance paths in this repo and the PrismLauncher instance.
 
 ## Git Workflow Preference
 

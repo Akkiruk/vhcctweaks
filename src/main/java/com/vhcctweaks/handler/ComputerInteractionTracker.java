@@ -3,13 +3,17 @@ package com.vhcctweaks.handler;
 import com.vhcctweaks.VHCCTweaks;
 import com.vhcctweaks.ccvault.SessionAuthManager;
 import com.vhcctweaks.config.ModConfig;
+import com.vhcctweaks.remote.RemoteControl;
+import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.inventory.ContainerComputerBase;
+import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -39,6 +43,8 @@ public class ComputerInteractionTracker {
     private static final Map<Integer, UUID> computerToPlayer = new ConcurrentHashMap<>();
     // computer ID → interaction timestamp (epoch millis)
     private static final Map<Integer, Long> interactionTimestamps = new ConcurrentHashMap<>();
+    // computer ID → player UUID → that player's own last interaction, for several players at one table
+    private static final Map<Integer, Map<UUID, Long>> playerTimestamps = new ConcurrentHashMap<>();
 
     /**
      * Max monitor blocks to traverse in BFS. A full 16x16 monitor is 256 blocks,
@@ -71,6 +77,14 @@ public class ComputerInteractionTracker {
             }
 
             recordInteraction(player, computerId, true);
+
+            // Queued before CC queues monitor_touch, so a script always sees who before where.
+            // These are CC's own conditions for a touch, so the two events always come as a pair.
+            if (be instanceof TileMonitor monitor && event.getHand() == InteractionHand.MAIN_HAND
+                    && !player.isCrouching() && event.getFace() == monitor.getFront()) {
+                ServerComputer computer = RemoteControl.find(level.getServer(), computerId);
+                if (computer != null) computer.queueEvent("vhcc_touch", new Object[]{player.getGameProfile().getName()});
+            }
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing right-click: {}", e.getMessage());
         }
@@ -185,6 +199,14 @@ public class ComputerInteractionTracker {
         return getPlayer(computerId);
     }
 
+    /** Whether this player touched this computer within the staleness window, whoever touched it last. */
+    public static boolean isFresh(int computerId, UUID playerUuid) {
+        Map<UUID, Long> players = playerTimestamps.get(computerId);
+        Long timestamp = players == null ? null : players.get(playerUuid);
+        if (timestamp == null) return false;
+        return System.currentTimeMillis() - timestamp <= ModConfig.CCVAULT_INTERACTION_STALE_SECONDS.get() * 1000L;
+    }
+
     /** Get the UUID of the player who last interacted, regardless of staleness. */
     public static UUID getPlayerUuid(int computerId) {
         return computerToPlayer.get(computerId);
@@ -196,6 +218,7 @@ public class ComputerInteractionTracker {
         computerToPlayer.put(computerId, player.getUUID());
         long now = System.currentTimeMillis();
         interactionTimestamps.put(computerId, now);
+        playerTimestamps.computeIfAbsent(computerId, id -> new ConcurrentHashMap<>()).put(player.getUUID(), now);
         SessionAuthManager.touchSession(player.getUUID(), computerId);
 
         // Block computers still claim ownership on first interaction.

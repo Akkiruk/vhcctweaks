@@ -1,6 +1,7 @@
 package com.vhcctweaks.api;
 
 import com.vhcctweaks.VHCCTweaks;
+import com.vhcctweaks.remote.RemoteControl;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
@@ -35,6 +36,8 @@ public class VHCCTweaksAPI implements ILuaAPI {
     private static final Pattern SAFE_SEGMENT = Pattern.compile("^[a-zA-Z0-9_\\-][a-zA-Z0-9_\\-.]{0,127}$");
     private static final long MAX_WRITE_SIZE = 1024 * 1024; // 1 MB per write
     private static final int MAX_PATH_DEPTH = 16;
+    // The mod's own records live under the same root. A forged WAL intent would mint tokens at the next restart.
+    private static final Set<String> RESERVED_ROOTS = Set.of("ccvault", "remote");
 
     private static Path rootDir;
     private final int computerId;
@@ -50,6 +53,15 @@ public class VHCCTweaksAPI implements ILuaAPI {
     @Override
     public String[] getNames() {
         return new String[]{"vhcc"};
+    }
+
+    /**
+     * Answer a remote code request. Used by the Roger supervisor, and only accepted for a
+     * request this computer was actually sent.
+     */
+    @LuaFunction
+    public final boolean rcReply(String request, String result) {
+        return RemoteControl.completeExec(computerId, request, result);
     }
 
     // ===== Path validation =====
@@ -79,6 +91,14 @@ public class VHCCTweaksAPI implements ILuaAPI {
                 throw new LuaException("vhcc: invalid path segment '" + seg +
                         "' - use letters, numbers, dashes, underscores, dots");
             }
+        }
+        for (String seg : segments) {
+            if (seg.isEmpty()) continue;
+            // Windows ignores case and trailing dots, so "CCVault." is the same folder
+            if (RESERVED_ROOTS.contains(seg.toLowerCase(Locale.ROOT).replaceAll("\\.+$", ""))) {
+                throw new LuaException("vhcc: '" + seg + "' is reserved");
+            }
+            break;
         }
     }
 

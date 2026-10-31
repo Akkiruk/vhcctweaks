@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -38,9 +37,9 @@ public class SessionAuthManager {
     private static final String NONCE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int NONCE_LENGTH = 12;
 
-    // Current authenticated principal per computer.
-    // Exactly one player may hold an active auth session for a computer at a time.
-    private static final Map<Integer, AuthSession> computerSessions = new ConcurrentHashMap<>();
+    // Authenticated players per computer. Several players can sit at one table,
+    // and one player approving never ends another player's session.
+    private static final Map<Integer, Map<UUID, AuthSession>> computerSessions = new ConcurrentHashMap<>();
 
     // Pending nonces: nonce string -> PendingAuth
     private static final Map<String, PendingAuth> pendingNonces = new ConcurrentHashMap<>();
@@ -52,7 +51,7 @@ public class SessionAuthManager {
     }
 
     /** An authenticated session for a computer. */
-    private record AuthSession(UUID playerUuid, long lastActivityAt) {}
+    private record AuthSession(long lastActivityAt) {}
 
     /** A pending auth request waiting for the player to click approve. */
     private record PendingAuth(UUID playerUuid, int computerId, long expiresAt) {}
@@ -76,32 +75,25 @@ public class SessionAuthManager {
      * Check if a player is authenticated for a specific computer.
      */
     public static boolean isAuthenticated(UUID playerUuid, int computerId) {
-        AuthSession session = getActiveSession(computerId);
-        return session != null && Objects.equals(session.playerUuid(), playerUuid);
-    }
-
-    /**
-     * Get the UUID currently authenticated for a computer, or null if none.
-     */
-    public static UUID getAuthenticatedPlayer(int computerId) {
-        AuthSession session = getActiveSession(computerId);
-        return session != null ? session.playerUuid() : null;
+        Map<UUID, AuthSession> sessions = computerSessions.get(computerId);
+        if (sessions == null) return false;
+        AuthSession session = sessions.get(playerUuid);
+        if (session == null) return false;
+        if (sessionExpired(session, System.currentTimeMillis())) {
+            sessions.remove(playerUuid, session);
+            return false;
+        }
+        return true;
     }
 
     /**
      * Refresh session activity for an already authenticated player.
      */
     public static void touchSession(UUID playerUuid, int computerId) {
+        Map<UUID, AuthSession> sessions = computerSessions.get(computerId);
+        if (sessions == null) return;
         long now = System.currentTimeMillis();
-        computerSessions.computeIfPresent(computerId, (id, session) -> {
-            if (sessionExpired(session, now)) {
-                return null;
-            }
-            if (!Objects.equals(session.playerUuid(), playerUuid)) {
-                return session;
-            }
-            return new AuthSession(playerUuid, now);
-        });
+        sessions.computeIfPresent(playerUuid, (id, session) -> sessionExpired(session, now) ? null : new AuthSession(now));
     }
 
     /**
@@ -164,7 +156,7 @@ public class SessionAuthManager {
             return false;
         }
 
-        computerSessions.put(pending.computerId(), new AuthSession(playerUuid, now));
+        computerSessions.computeIfAbsent(pending.computerId(), id -> new ConcurrentHashMap<>()).put(playerUuid, new AuthSession(now));
         VHCCTweaks.LOGGER.debug("CCVault: Player {} authenticated for computer {}", playerUuid, pending.computerId());
         return true;
     }
@@ -173,16 +165,16 @@ public class SessionAuthManager {
      * Revoke a player's session for a specific computer.
      */
     public static void revokeSession(UUID playerUuid, int computerId) {
-        computerSessions.computeIfPresent(computerId, (id, session) ->
-                Objects.equals(session.playerUuid(), playerUuid) ? null : session);
+        Map<UUID, AuthSession> sessions = computerSessions.get(computerId);
+        if (sessions != null) sessions.remove(playerUuid);
     }
 
     /**
      * Clear all auth state for a player when they disconnect.
      */
     public static void clearPlayerSessions(UUID playerUuid) {
-        computerSessions.entrySet().removeIf(entry -> Objects.equals(entry.getValue().playerUuid(), playerUuid));
-        pendingNonces.values().removeIf(p -> Objects.equals(p.playerUuid(), playerUuid));
+        computerSessions.values().forEach(sessions -> sessions.remove(playerUuid));
+        pendingNonces.values().removeIf(p -> p.playerUuid().equals(playerUuid));
     }
 
     @SubscribeEvent
@@ -201,19 +193,8 @@ public class SessionAuthManager {
         return sb.toString();
     }
 
-    private static AuthSession getActiveSession(int computerId) {
-        long now = System.currentTimeMillis();
-        AuthSession session = computerSessions.get(computerId);
-        if (session == null) return null;
-        if (sessionExpired(session, now)) {
-            computerSessions.remove(computerId, session);
-            return null;
-        }
-        return session;
-    }
-
     private static void purgeExpiredSessions(long now) {
-        computerSessions.entrySet().removeIf(entry -> sessionExpired(entry.getValue(), now));
+        computerSessions.values().forEach(sessions -> sessions.values().removeIf(session -> sessionExpired(session, now)));
     }
 
     private static boolean sessionExpired(AuthSession session, long now) {

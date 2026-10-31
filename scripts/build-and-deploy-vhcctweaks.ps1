@@ -10,8 +10,8 @@ $commonPath = Join-Path $PSScriptRoot "vhcctweaks-common.ps1"
 . $commonPath
 
 $repoRoot = Get-RepoRoot -ScriptRoot $PSScriptRoot
-$modsDir = Join-Path $env:APPDATA "PrismLauncher\instances\Vault Paradise\minecraft\mods"
-$instanceScriptsDir = Join-Path $env:APPDATA "PrismLauncher\instances\Vault Paradise\minecraft\scripts"
+$modsDir = Join-Path $env:APPDATA "PrismLauncher\instances\Vaulters-Paradise\minecraft\mods"
+$instanceScriptsDir = Join-Path $env:APPDATA "PrismLauncher\instances\Vaulters-Paradise\minecraft\scripts"
 $version = Get-ModVersion -RepoRoot $repoRoot
 $javaHome = Get-Java17Home
 

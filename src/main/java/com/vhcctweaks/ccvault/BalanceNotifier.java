@@ -49,7 +49,7 @@ public class BalanceNotifier {
         ServerPlayer player = getPlayer(uuid);
         if (player == null) return;
 
-        long newBalance = DogBridge.getBalance(uuid);
+        long newBalance = EconomyBridge.getBalance(uuid);
 
         MutableComponent msg = new TextComponent("")
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
@@ -71,7 +71,7 @@ public class BalanceNotifier {
         ServerPlayer player = getPlayer(uuid);
         if (player == null) return;
 
-        long newBalance = DogBridge.getBalance(uuid);
+        long newBalance = EconomyBridge.getBalance(uuid);
 
         MutableComponent msg = new TextComponent("")
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
@@ -93,7 +93,7 @@ public class BalanceNotifier {
         ServerPlayer player = getPlayer(uuid);
         if (player == null) return;
 
-        long balance = DogBridge.getBalance(uuid);
+        long balance = EconomyBridge.getBalance(uuid);
 
         MutableComponent msg = new TextComponent("")
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))

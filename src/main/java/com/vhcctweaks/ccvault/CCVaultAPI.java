@@ -5,7 +5,9 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.ProfileLookupCallback;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
+import com.vhcctweaks.handler.ComputerLock;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
+import com.vhcctweaks.remote.RemoteControl;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
@@ -34,16 +36,20 @@ import java.util.concurrent.atomic.AtomicReference;
  *   ccvault.isAuthenticated()                       -- check if session is active
  *   ccvault.getBalance("player")                    -- interacting player's balance
  *   ccvault.getBalance("host")                      -- computer owner's balance
+ *   ccvault.getBalance("player:Name")               -- a named player at this table
  *   ccvault.getPlayerBalance("SomePlayer")          -- resolve a player name/UUID and read their balance
  *   ccvault.transfer("player", "host", 100, "shop") -- balanced transfer
  *   ccvault.getPlayerName()                         -- interacting player's name
  *   ccvault.getHostName()                           -- computer owner's name
+ *   ccvault.transfer("player:Name", "host", 100, "ante") -- charge one named player at this table
  *   ccvault.claimHost()                             -- trusted installer/setup host claim
+ *   ccvault.setTerminalLock(true)                   -- owner only: nobody else can open or break this computer
  *   ccvault.isAvailable()                           -- is the economy system loaded?
  */
 public class CCVaultAPI implements ILuaAPI {
 
     private static final int MAX_REASON_LENGTH = 64;
+    private static final String NAMED_PLAYER_PREFIX = "player:";
     private static final String OWNER_REGISTRATION_MESSAGE =
             "computer has no registered owner - run installer or interact with it once to register";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -59,6 +65,12 @@ public class CCVaultAPI implements ILuaAPI {
         return new String[]{"ccvault"};
     }
 
+    /** A reboot ends remote control of this computer. */
+    @Override
+    public void startup() {
+        RemoteControl.clearControlled(computerId);
+    }
+
     // ===== Availability =====
 
     /**
@@ -67,7 +79,7 @@ public class CCVaultAPI implements ILuaAPI {
      */
     @LuaFunction
     public final boolean isAvailable() {
-        return DogBridge.isAvailable();
+        return EconomyBridge.isAvailable();
     }
 
     // ===== Authentication =====
@@ -113,9 +125,9 @@ public class CCVaultAPI implements ILuaAPI {
      */
     @LuaFunction
     public final Object[] getBalance(String target) throws LuaException {
-        requireAuth();
+        authorize(target);
         UUID uuid = resolveTarget(target);
-        long balance = DogBridge.getBalance(uuid);
+        long balance = EconomyBridge.getBalance(uuid);
         if (balance < 0) {
             return new Object[]{null, "could not read balance"};
         }
@@ -140,7 +152,7 @@ public class CCVaultAPI implements ILuaAPI {
             return new Object[]{null, "unknown player or UUID '" + normalizedPlayerName + "'"};
         }
 
-        long balance = DogBridge.getBalance(playerUuid);
+        long balance = EconomyBridge.getBalance(playerUuid);
         if (balance < 0) {
             return new Object[]{null, "could not read balance"};
         }
@@ -167,11 +179,11 @@ public class CCVaultAPI implements ILuaAPI {
      */
     @LuaFunction
     public final Object[] transfer(String from, String to, long amount, String reason) throws LuaException {
-        requireAuth();
-
         if (from == null || to == null) {
             return new Object[]{null, "from and to are required"};
         }
+        authorize(from, to);
+
         if (from.equals(to)) {
             return new Object[]{null, "cannot transfer to self"};
         }
@@ -192,8 +204,12 @@ public class CCVaultAPI implements ILuaAPI {
             return new Object[]{null, "cannot transfer to yourself — player and host are the same account"};
         }
 
-        UUID playerUuid = getInteractingPlayerOrThrow().getUUID();
+        UUID playerUuid = isNamed(from) ? fromUuid : isNamed(to) ? toUuid : getInteractingPlayerOrThrow().getUUID();
         UUID hostUuid = ComputerPlacementTracker.getOwner(computerId);
+
+        if (RemoteControl.blocksTransfer(computerId, playerUuid)) {
+            return new Object[]{null, "this computer was remotely controlled - reboot it before moving tokens"};
+        }
 
         TransferService.TransferResult result = TransferService.execute(
                 fromUuid, toUuid, amount, reason, computerId, playerUuid, hostUuid);
@@ -273,6 +289,33 @@ public class CCVaultAPI implements ILuaAPI {
     @LuaFunction
     public final int getComputerId() {
         return computerId;
+    }
+
+    // ===== Terminal Lock =====
+
+    /**
+     * Lock this computer so only its owner and server admins can open its terminal or break it.
+     * Monitors keep working for everyone. Only the owner can change it, while using the computer.
+     *
+     * Lua: local ok, err = ccvault.setTerminalLock(true)
+     */
+    @LuaFunction
+    public final Object[] setTerminalLock(boolean locked) throws LuaException {
+        ServerPlayer player = getInteractingPlayerOrThrow();
+        if (!player.getUUID().equals(ComputerPlacementTracker.getOwner(computerId))) {
+            return new Object[]{null, "only this computer's owner can change its lock"};
+        }
+        ComputerLock.setLocked(computerId, locked);
+        return new Object[]{true};
+    }
+
+    /**
+     * Whether this computer's terminal is locked.
+     * Lua: if ccvault.isTerminalLocked() then ... end
+     */
+    @LuaFunction
+    public final boolean isTerminalLocked() {
+        return ComputerLock.isLocked(computerId);
     }
 
     // ===== Session Info =====
@@ -357,7 +400,7 @@ public class CCVaultAPI implements ILuaAPI {
         }
 
         // Self-play simulation: validate balance but don't move money
-        long balance = DogBridge.getBalance(playerUuid);
+        long balance = EconomyBridge.getBalance(playerUuid);
         if (balance < 0) {
             return new Object[]{null, "could not read balance"};
         }
@@ -447,17 +490,44 @@ public class CCVaultAPI implements ILuaAPI {
 
     private void requireAuth() throws LuaException {
         ServerPlayer player = getInteractingPlayerOrThrow();
-        UUID expectedPlayer = SessionAuthManager.getAuthenticatedPlayer(computerId);
-        if (expectedPlayer == null) {
-            throw new LuaException("not authenticated — call ccvault.requestAuth() first");
-        }
-        if (!expectedPlayer.equals(player.getUUID())) {
-            throw new LuaException("session belongs to another player — re-authenticate on this terminal");
-        }
         if (!SessionAuthManager.isAuthenticated(player.getUUID(), computerId)) {
             throw new LuaException("not authenticated — call ccvault.requestAuth() first");
         }
         SessionAuthManager.touchSession(player.getUUID(), computerId);
+    }
+
+    private static boolean isNamed(String target) {
+        return target.toLowerCase(Locale.ROOT).startsWith(NAMED_PLAYER_PREFIX);
+    }
+
+    /** "player" means whoever touched last and needs their session. "player:Name" is checked in resolveTarget. */
+    private void authorize(String... targets) throws LuaException {
+        boolean anyNamed = false;
+        boolean anyLastPlayer = false;
+        for (String target : targets) {
+            if (target == null) throw new LuaException("target is required");
+            anyNamed |= isNamed(target);
+            anyLastPlayer |= target.equalsIgnoreCase("player");
+        }
+        if (anyLastPlayer || !anyNamed) requireAuth();
+    }
+
+    /** A named player must be at this table: online, approved here, and touching it within the staleness window. */
+    private UUID resolveNamedPlayer(String target) throws LuaException {
+        String name = target.substring(NAMED_PLAYER_PREFIX.length());
+        var server = ServerLifecycleHooks.getCurrentServer();
+        ServerPlayer player = server == null ? null : server.getPlayerList().getPlayerByName(name);
+        if (player == null) {
+            throw new LuaException("player '" + name + "' is not online");
+        }
+        if (!SessionAuthManager.isAuthenticated(player.getUUID(), computerId)) {
+            throw new LuaException("player '" + name + "' has not approved this computer");
+        }
+        if (!ComputerInteractionTracker.isFresh(computerId, player.getUUID())) {
+            throw new LuaException("player '" + name + "' has not touched this computer recently");
+        }
+        SessionAuthManager.touchSession(player.getUUID(), computerId);
+        return player.getUUID();
     }
 
     private ServerPlayer getInteractingPlayerOrThrow() throws LuaException {
@@ -469,6 +539,9 @@ public class CCVaultAPI implements ILuaAPI {
     }
 
     private UUID resolveTarget(String target) throws LuaException {
+        if (isNamed(target)) {
+            return resolveNamedPlayer(target);
+        }
         return switch (target.toLowerCase()) {
             case "player" -> {
                 ServerPlayer p = getInteractingPlayerOrThrow();
@@ -481,7 +554,7 @@ public class CCVaultAPI implements ILuaAPI {
                 }
                 yield owner;
             }
-            default -> throw new LuaException("invalid target '" + target + "' — use 'player' or 'host'");
+            default -> throw new LuaException("invalid target '" + target + "' — use 'player', 'player:Name' or 'host'");
         };
     }
 

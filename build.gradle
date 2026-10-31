@@ -88,6 +88,11 @@ archivesBaseName = resolvedModId
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
+// Without this a Windows build reads the sources as cp1252 and mangles every em dash in Lua-facing messages
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 minecraft {
     mappings channel: gradleProps.getProperty('mappings_channel'), version: gradleProps.getProperty('mappings_version')
 

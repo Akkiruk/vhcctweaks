@@ -6,11 +6,14 @@ import com.vhcctweaks.ccvault.SessionAuthManager;
 import com.vhcctweaks.ccvault.TransactionLedger;
 import com.vhcctweaks.ccvault.TransferService;
 import com.vhcctweaks.command.CCVaultCommand;
+import com.vhcctweaks.command.RemoteCommand;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
+import com.vhcctweaks.handler.ComputerLock;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
 import com.vhcctweaks.handler.VaultProtectionHandler;
 import com.vhcctweaks.patcher.VaultConfigPatcher;
+import com.vhcctweaks.remote.RemoteControl;
 import com.vhcctweaks.detail.VaultItemDetailProvider;
 import dan200.computercraft.api.ComputerCraftAPI;
 import dan200.computercraft.api.detail.DetailRegistries;
@@ -41,6 +44,8 @@ public class VHCCTweaks {
         MinecraftForge.EVENT_BUS.register(ComputerInteractionTracker.class);
         // Track which player owns each CC computer (host UUID for CCVault)
         MinecraftForge.EVENT_BUS.register(ComputerPlacementTracker.class);
+        // Refuse locked computers to everyone but their owner
+        MinecraftForge.EVENT_BUS.register(ComputerLock.class);
         // Track CCVault auth grants and approval prompts
         MinecraftForge.EVENT_BUS.register(SessionAuthManager.class);
         // Command registration and server start events
@@ -64,9 +69,13 @@ public class VHCCTweaks {
         // CCVault economy system init
         SessionAuthManager.init(dataDir);
         ComputerPlacementTracker.init(dataDir);
+        ComputerLock.init(dataDir);
         TransactionLedger.init(dataDir);
         TransferService.init(dataDir);
         ComputerCraftAPI.registerAPIFactory(computer -> new CCVaultAPI(computer.getID()));
+
+        // Remote control for allowed admins, driven by /vhcc pc
+        RemoteControl.init(dataDir);
 
         // Vault item detail provider — enriches getItemDetail() with VH item data
         DetailRegistries.ITEM_STACK.addProvider(new VaultItemDetailProvider());
@@ -75,6 +84,7 @@ public class VHCCTweaks {
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CCVaultCommand.register(event.getDispatcher());
+        RemoteCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
@@ -82,6 +92,9 @@ public class VHCCTweaks {
         // Run WAL crash recovery after server is fully loaded
         TransferService.recover();
         LOGGER.info("CCVault: WAL recovery complete");
+        LOGGER.info("Remote control of computers: {}, {} listed players, audit log in vhcc_data/remote/audit.log",
+                ModConfig.REMOTE_CONTROL_ENABLED.get() ? "ON" : "OFF",
+                ModConfig.REMOTE_CONTROL_ALLOWED_PLAYERS.get().size());
     }
 
 

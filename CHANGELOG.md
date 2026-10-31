@@ -4,6 +4,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [2.2.35] - 2026-10-31
+
 - `ccvault.claimHost()` now takes a chat click: it sends a `[CONFIRM]` prompt and the claim happens when the player clicks, so it returns before the claim lands. Scripts that expected an immediate result need updating.
 - Added `ccvault.forgetHost()`, which clears a computer's host and lifts its terminal lock.
 - Computers are owned by whoever places them. The first click no longer takes ownership, and tapping a monitor never does.
@@ -22,7 +26,6 @@ All notable changes to VH CC Tweaks are documented here.
 - Removed the legacy research cleanup and the reflection helper, and corrected docs that described a rate limiter and self-play behaviour the mod does not have.
 - Documented the `computerLock.enabled` config, added in 2.2.34. Turning it off lets everyone in without forgetting which computers are locked.
 - Added unit tests, run by `gradlew build`.
-
 ## [2.2.34] - 2026-10-30
 
 - Moved `ccvault` from the removed PlayerShops `VaultTokenAPI` to the ParadiseCore economy. On the current pack the old class no longer exists, so `ccvault.isAvailable()` was false and every transfer failed.

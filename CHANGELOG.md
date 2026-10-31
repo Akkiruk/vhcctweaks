@@ -4,6 +4,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [2.2.34] - 2026-10-30
+
 - Moved `ccvault` from the removed PlayerShops `VaultTokenAPI` to the ParadiseCore economy. On the current pack the old class no longer exists, so `ccvault.isAvailable()` was false and every transfer failed.
 - Transfers now use the economy's single database transaction instead of a separate debit and credit. New transfers write no WAL intents; intents left by older versions are still recovered at startup.
 - `ccvault.enabled` now actually turns the API off.
@@ -20,7 +24,6 @@ All notable changes to VH CC Tweaks are documented here.
 - Removed the RS Bridge recipe, matching the server's build: Refined Storage is not in the pack.
 - Builds are always UTF-8, so Windows builds no longer mangle em dashes in Lua-facing messages.
 - Deploy helper and docs point at the `Vaulters-Paradise` instance.
-
 ## [2.2.23] - 2026-04-10
 
 - Removed the `Advanced Peripherals` Vault research injection so startup cleanup now strips both legacy CC and AP research entries, GUI styles, and skill descriptions.

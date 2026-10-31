@@ -2,9 +2,12 @@ package com.vhcctweaks.handler;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import com.vhcctweaks.VHCCTweaks;
 import com.vhcctweaks.config.ModConfig;
+import com.vhcctweaks.util.AtomicFiles;
+import dan200.computercraft.shared.computer.blocks.TileComputerBase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.server.level.ServerPlayer;
@@ -40,13 +43,18 @@ public class ComputerLock {
     private static Path persistPath;
 
     public static void init(Path dataDir) {
+        locked.clear();
         persistPath = dataDir.resolve("ccvault").resolve("locks.json");
         if (!Files.exists(persistPath)) return;
         try {
             List<Integer> ids = GSON.fromJson(Files.readString(persistPath, StandardCharsets.UTF_8), LIST_TYPE);
-            if (ids != null) locked.addAll(ids);
-        } catch (Exception e) {
+            if (ids == null) throw new JsonParseException("file is empty");
+            locked.addAll(ids);
+        } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to load locks.json", e);
+        } catch (JsonParseException e) {
+            VHCCTweaks.LOGGER.error("CCVault: locks.json is damaged, every computer is now unlocked", e);
+            AtomicFiles.setAside(persistPath);
         }
     }
 
@@ -62,15 +70,15 @@ public class ComputerLock {
     private static synchronized void save() {
         if (persistPath == null) return;
         try {
-            Files.createDirectories(persistPath.getParent());
-            Files.writeString(persistPath, GSON.toJson(new ArrayList<>(locked)), StandardCharsets.UTF_8);
+            AtomicFiles.writeString(persistPath, GSON.toJson(new ArrayList<>(locked)));
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to save locks.json", e);
         }
     }
 
     private static boolean refuses(ServerPlayer player, BlockEntity blockEntity) {
-        int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(blockEntity);
+        if (!(blockEntity instanceof TileComputerBase computer)) return false;
+        int computerId = computer.getComputerID();
         if (computerId < 0 || !isLocked(computerId) || !ModConfig.COMPUTER_LOCK_ENABLED.get()) return false;
         UUID owner = ComputerPlacementTracker.getOwner(computerId);
         if (player.getUUID().equals(owner) || player.hasPermissions(2)) return false;

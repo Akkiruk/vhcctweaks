@@ -137,6 +137,14 @@ dependencies {
 
     // Mixin annotation processor for refmap generation
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+    testImplementation "org.squiddev:cc-tweaked-${gradleProps.getProperty('minecraft_version')}:${gradleProps.getProperty('cc_version')}"
+}
+
+test {
+    useJUnitPlatform()
 }
 
 tasks.register('checkClientPacketSafety') {

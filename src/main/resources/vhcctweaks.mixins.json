@@ -7,7 +7,8 @@
     "ChatBoxEventsMixin",
     "ChatBoxPeripheralMixin",
     "RecipeResolverMixin",
-    "ServerComputerLockdownMixin"
+    "ServerComputerLockdownMixin",
+    "TileMonitorAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

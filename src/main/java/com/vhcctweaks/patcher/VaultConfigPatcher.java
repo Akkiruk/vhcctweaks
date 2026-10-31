@@ -15,17 +15,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Patches Vault Hunters config JSON files on startup for vhcctweaks-managed entries.
+ * Patches config files on startup for vhcctweaks-managed entries.
  * This ensures:
  * - computercraft:* is in the vault item/block blacklists
-* - legacy CC:Tweaked and Advanced Peripherals research entries injected by older versions are removed
+ * - Advanced Peripherals and ComputerCraft settings match this pack, and managed scripts are in place
  */
 public class VaultConfigPatcher {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String CC_WILDCARD = "computercraft:*";
     private static final String AP_WILDCARD = "advancedperipherals:*";
-    private static final String CC_RESEARCH = "CC: Tweaked";
-    private static final String AP_RESEARCH = "Advanced Peripherals";
     private static final String[] MANAGED_CRAFTTWEAKER_SCRIPTS = {"ComputerCraft.zs", "AdvancedPeripherals.zs"};
     private static final int MONITOR_MAX_WIDTH = 16;
     private static final int MONITOR_MAX_HEIGHT = 16;
@@ -35,26 +33,6 @@ public class VaultConfigPatcher {
             patchVaultBlacklists(configDir);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.warn("Could not patch vault_general.json: {}", e.getMessage());
-        }
-        try {
-            patchResearches(configDir);
-        } catch (Exception e) {
-            VHCCTweaks.LOGGER.warn("Could not patch researches.json: {}", e.getMessage());
-        }
-        try {
-            patchResearchGroups(configDir);
-        } catch (Exception e) {
-            VHCCTweaks.LOGGER.warn("Could not patch researches_groups.json: {}", e.getMessage());
-        }
-        try {
-            patchResearchGuiStyles(configDir);
-        } catch (Exception e) {
-            VHCCTweaks.LOGGER.warn("Could not patch researches_gui_styles.json: {}", e.getMessage());
-        }
-        try {
-            patchSkillDescriptions(configDir);
-        } catch (Exception e) {
-            VHCCTweaks.LOGGER.warn("Could not patch skill_descriptions.json: {}", e.getMessage());
         }
         try {
             patchAPConfigs(configDir);
@@ -118,143 +96,6 @@ public class VaultConfigPatcher {
         }
 
         if (changed) {
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
-        }
-    }
-
-    private static void patchResearches(Path configDir) throws IOException {
-        Path path = configDir.resolve("the_vault/researches.json");
-        if (!Files.exists(path)) {
-            VHCCTweaks.LOGGER.info("researches.json not found, skipping research patch");
-            return;
-        }
-
-        String content = Files.readString(path, StandardCharsets.UTF_8);
-        JsonObject root = JsonParser.parseString(content).getAsJsonObject();
-        boolean changed = false;
-
-        if (!root.has("MOD_RESEARCHES")) return;
-        JsonArray researches = root.getAsJsonArray("MOD_RESEARCHES");
-
-        if (removeResearchNamed(researches, CC_RESEARCH)) {
-            changed = true;
-            VHCCTweaks.LOGGER.info("Removed legacy '{}' research entry", CC_RESEARCH);
-        }
-
-        if (removeResearchNamed(researches, AP_RESEARCH)) {
-            changed = true;
-            VHCCTweaks.LOGGER.info("Removed legacy '{}' research entry", AP_RESEARCH);
-        }
-
-        if (changed) {
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
-        }
-    }
-
-    private static void patchResearchGroups(Path configDir) throws IOException {
-        Path path = configDir.resolve("the_vault/researches_groups.json");
-        if (!Files.exists(path)) {
-            VHCCTweaks.LOGGER.info("researches_groups.json not found, skipping group patch");
-            return;
-        }
-
-        String content = Files.readString(path, StandardCharsets.UTF_8);
-        JsonObject root = JsonParser.parseString(content).getAsJsonObject();
-
-        if (!root.has("groups")) return;
-        JsonObject groups = root.getAsJsonObject("groups");
-
-        boolean changed = false;
-        for (String groupName : groups.keySet()) {
-            JsonElement groupElement = groups.get(groupName);
-            if (!groupElement.isJsonObject()) continue;
-
-            JsonObject group = groupElement.getAsJsonObject();
-            if (!group.has("research")) continue;
-
-            JsonArray researchArray = group.getAsJsonArray("research");
-            if (removeString(researchArray, CC_RESEARCH)) {
-                changed = true;
-                VHCCTweaks.LOGGER.info("Removed legacy '{}' from {} research group", CC_RESEARCH, groupName);
-            }
-            if (removeString(researchArray, AP_RESEARCH)) {
-                changed = true;
-                VHCCTweaks.LOGGER.info("Removed legacy '{}' from {} research group", AP_RESEARCH, groupName);
-            }
-        }
-
-        if (changed) {
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
-        }
-    }
-
-
-
-    private static void patchResearchGuiStyles(Path configDir) throws IOException {
-        Path path = configDir.resolve("the_vault/researches_gui_styles.json");
-        if (!Files.exists(path)) {
-            VHCCTweaks.LOGGER.info("researches_gui_styles.json not found, skipping GUI style patch");
-            return;
-        }
-
-        String content = Files.readString(path, StandardCharsets.UTF_8);
-        JsonObject root = JsonParser.parseString(content).getAsJsonObject();
-
-        if (!root.has("styles")) return;
-        JsonObject styles = root.getAsJsonObject("styles");
-
-        boolean guiChanged = false;
-        if (styles.remove(CC_RESEARCH) != null) {
-            guiChanged = true;
-            VHCCTweaks.LOGGER.info("Removed legacy '{}' GUI style", CC_RESEARCH);
-        }
-        if (styles.remove(AP_RESEARCH) != null) {
-            guiChanged = true;
-            VHCCTweaks.LOGGER.info("Removed legacy '{}' GUI style", AP_RESEARCH);
-        }
-
-        if (guiChanged) {
-            Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
-        }
-    }
-
-    private static boolean removeString(JsonArray array, String value) {
-        boolean changed = false;
-        for (int i = array.size() - 1; i >= 0; i--) {
-            JsonElement element = array.get(i);
-            if (element.isJsonPrimitive() && value.equals(element.getAsString())) {
-                array.remove(i);
-                changed = true;
-            }
-        }
-        return changed;
-    }
-
-    private static void patchSkillDescriptions(Path configDir) throws IOException {
-        Path path = configDir.resolve("the_vault/skill_descriptions.json");
-        if (!Files.exists(path)) {
-            VHCCTweaks.LOGGER.info("skill_descriptions.json not found, skipping description patch");
-            return;
-        }
-
-        String content = Files.readString(path, StandardCharsets.UTF_8);
-        JsonObject root = JsonParser.parseString(content).getAsJsonObject();
-
-        if (!root.has("descriptions")) return;
-        JsonObject descriptions = root.getAsJsonObject("descriptions");
-
-        boolean descChanged = false;
-        if (descriptions.remove(CC_RESEARCH) != null) {
-            descChanged = true;
-            VHCCTweaks.LOGGER.info("Removed legacy '{}' description from skill_descriptions.json", CC_RESEARCH);
-        }
-
-        if (descriptions.remove(AP_RESEARCH) != null) {
-            descChanged = true;
-            VHCCTweaks.LOGGER.info("Removed legacy '{}' description from skill_descriptions.json", AP_RESEARCH);
-        }
-
-        if (descChanged) {
             Files.writeString(path, GSON.toJson(root), StandardCharsets.UTF_8);
         }
     }
@@ -463,18 +304,4 @@ public class VaultConfigPatcher {
         return false;
     }
 
-    private static boolean removeResearchNamed(JsonArray researches, String name) {
-        boolean changed = false;
-        for (int i = researches.size() - 1; i >= 0; i--) {
-            JsonElement el = researches.get(i);
-            if (el.isJsonObject()) {
-                JsonObject obj = el.getAsJsonObject();
-                if (obj.has("name") && obj.get("name").getAsString().equals(name)) {
-                    researches.remove(i);
-                    changed = true;
-                }
-            }
-        }
-        return changed;
-    }
 }

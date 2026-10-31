@@ -1,8 +1,6 @@
 package com.vhcctweaks.ccvault;
 
-import com.mojang.authlib.Agent;
 import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.ProfileLookupCallback;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerLock;
@@ -21,14 +19,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Executors;
 
 /**
  * CCVault Lua API exposed as "ccvault" to all CC:Tweaked computers.
  *
  * Security model:
  * - Scripts can only reference "player" (interacting player) or "host" (computer owner).
- * - No raw UUID targeting. Only trusted local setup flows may claim host.
+ * - No raw UUID targeting. Whoever places a computer is its host; becoming host any other way takes a chat click.
  * - Requires server-side authentication via clickable chat nonce.
  *
  * Lua usage:
@@ -42,7 +40,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *   ccvault.getPlayerName()                         -- interacting player's name
  *   ccvault.getHostName()                           -- computer owner's name
  *   ccvault.transfer("player:Name", "host", 100, "ante") -- charge one named player at this table
- *   ccvault.claimHost()                             -- trusted installer/setup host claim
+ *   ccvault.claimHost()                             -- asks the interacting player to confirm in chat
+ *   ccvault.forgetHost()                            -- this computer has no host until someone claims it
  *   ccvault.setTerminalLock(true)                   -- owner only: nobody else can open or break this computer
  *   ccvault.isAvailable()                           -- is the economy system loaded?
  */
@@ -51,8 +50,14 @@ public class CCVaultAPI implements ILuaAPI {
     private static final int MAX_REASON_LENGTH = 64;
     private static final String NAMED_PLAYER_PREFIX = "player:";
     private static final String OWNER_REGISTRATION_MESSAGE =
-            "computer has no registered owner - run installer or interact with it once to register";
+            "computer has no registered owner - right-click it and claim it in chat, or call ccvault.claimHost()";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final PlayerLookup PLAYER_LOOKUP = new PlayerLookup(CCVaultAPI::lookUpProfile,
+            Executors.newSingleThreadExecutor(task -> {
+                Thread thread = new Thread(task, "VHCC-PlayerLookup");
+                thread.setDaemon(true);
+                return thread;
+            }));
 
     private final int computerId;
 
@@ -137,6 +142,7 @@ public class CCVaultAPI implements ILuaAPI {
     /**
         * Get the current token balance for a player resolved by username or UUID string.
      * Read-only: does not require authentication and cannot change balances.
+     * The first call for a player who is offline can answer "try again" while the name is looked up.
      *
      * Lua: local bal, err = ccvault.getPlayerBalance("SomePlayer")
      */
@@ -147,12 +153,15 @@ public class CCVaultAPI implements ILuaAPI {
         }
 
         String normalizedPlayerName = playerName.trim();
-        UUID playerUuid = resolvePlayerUuidByName(normalizedPlayerName);
-        if (playerUuid == null) {
+        PlayerLookup.Result lookup = resolvePlayer(normalizedPlayerName);
+        if (lookup.status() == PlayerLookup.Status.PENDING) {
+            return new Object[]{null, "looking up player '" + normalizedPlayerName + "' - try again"};
+        }
+        if (lookup.status() == PlayerLookup.Status.UNKNOWN) {
             return new Object[]{null, "unknown player or UUID '" + normalizedPlayerName + "'"};
         }
 
-        long balance = EconomyBridge.getBalance(playerUuid);
+        long balance = EconomyBridge.getBalance(lookup.uuid());
         if (balance < 0) {
             return new Object[]{null, "could not read balance"};
         }
@@ -165,9 +174,7 @@ public class CCVaultAPI implements ILuaAPI {
      * Execute a balanced transfer between "player" and "host".
      * Requires authentication. Amount must be positive.
      *
-     * When player and host are the same account (self-play), the transfer is
-     * simulated: balance is validated but no money moves. A chat message shows
-     * what WOULD happen, and a ledger entry is logged with [self-play] tag.
+     * When player and host are the same account the transfer is refused: use transferSelf.
      *
      * Lua: local result, err = ccvault.transfer("player", "host", 100, "shop purchase")
      *      if result then print("TX: " .. result.txId) end
@@ -240,8 +247,7 @@ public class CCVaultAPI implements ILuaAPI {
     }
 
     /**
-     * Get the computer owner's username (the player who first registered this computer).
-     * Returns nil if the owner is unknown or offline.
+     * Get the computer owner's username. Returns the owner's UUID if they are offline, and nil if there is no owner.
      * Lua: local name = ccvault.getHostName()
      */
     @LuaFunction
@@ -260,26 +266,39 @@ public class CCVaultAPI implements ILuaAPI {
     }
 
     /**
-     * Claim this computer's host owner for the current interacting player.
-     * Intended for trusted installer/setup flows on pocket computers.
+     * Ask the current interacting player to become this computer's host. They confirm with a click in chat,
+     * so this returns before the claim happens: check getSessionInfo().isSelfPlay to see it land.
+     * Returns a table straight away only when they are already the host.
      *
      * Lua: local result, err = ccvault.claimHost()
-     *      if result then print(result.hostName, result.changed) end
+     *      if result then print(result.hostName) else print(err) end
      */
     @LuaFunction
     public final Object[] claimHost() throws LuaException {
         ServerPlayer player = getInteractingPlayerOrThrow();
-        UUID playerUuid = player.getUUID();
-        UUID previousOwner = ComputerPlacementTracker.getOwner(computerId);
-        boolean changed = ComputerPlacementTracker.replaceOwner(computerId, playerUuid);
+        if (player.getUUID().equals(ComputerPlacementTracker.getOwner(computerId))) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("hostName", player.getName().getString());
+            response.put("computerId", computerId);
+            return new Object[]{response};
+        }
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("changed", changed);
-        response.put("hostName", player.getName().getString());
-        response.put("computerId", computerId);
-        response.put("previousHostUuid", previousOwner != null ? previousOwner.toString() : null);
-        return new Object[]{response};
+        return switch (SessionAuthManager.requestHostClaim(player, computerId)) {
+            case PENDING -> new Object[]{null, "host claim already pending — check your chat"};
+            default -> new Object[]{null, "confirm the host claim in chat"};
+        };
+    }
+
+    /**
+     * Forget this computer's host and lift its terminal lock. Afterwards the next player to place it,
+     * or to confirm ccvault.claimHost, becomes the host.
+     *
+     * Lua: local hadHost = ccvault.forgetHost()
+     */
+    @LuaFunction
+    public final boolean forgetHost() {
+        return ComputerPlacementTracker.clearOwner(computerId);
     }
 
     /**
@@ -564,48 +583,27 @@ public class CCVaultAPI implements ILuaAPI {
         return server.getPlayerList().getPlayer(uuid);
     }
 
-    private UUID resolvePlayerUuidByName(String playerName) {
+    private PlayerLookup.Result resolvePlayer(String playerName) {
         var server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) return null;
+        if (server == null) return new PlayerLookup.Result(PlayerLookup.Status.UNKNOWN, null);
 
         try {
-            return UUID.fromString(playerName);
+            return new PlayerLookup.Result(PlayerLookup.Status.FOUND, UUID.fromString(playerName));
         } catch (IllegalArgumentException ignored) {
             // Not a UUID string — continue with name-based lookup.
         }
 
         ServerPlayer onlinePlayer = server.getPlayerList().getPlayerByName(playerName);
         if (onlinePlayer != null) {
-            return onlinePlayer.getUUID();
+            return new PlayerLookup.Result(PlayerLookup.Status.FOUND, onlinePlayer.getUUID());
         }
+        return PLAYER_LOOKUP.lookup(playerName);
+    }
 
-        String normalizedLookup = playerName.toLowerCase(Locale.ROOT);
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (player.getGameProfile().getName().equalsIgnoreCase(normalizedLookup)) {
-                return player.getUUID();
-            }
-        }
-
-        Optional<GameProfile> cachedProfile = server.getProfileCache().get(playerName);
-        if (cachedProfile.isPresent() && cachedProfile.get().getId() != null) {
-            return cachedProfile.get().getId();
-        }
-
-        AtomicReference<UUID> resolvedUuid = new AtomicReference<>();
-        server.getProfileRepository().findProfilesByNames(new String[]{playerName}, Agent.MINECRAFT, new ProfileLookupCallback() {
-            @Override
-            public void onProfileLookupSucceeded(GameProfile profile) {
-                if (profile != null && profile.getId() != null) {
-                    resolvedUuid.compareAndSet(null, profile.getId());
-                    server.getProfileCache().add(profile);
-                }
-            }
-
-            @Override
-            public void onProfileLookupFailed(GameProfile profile, Exception exception) {
-                // Leave null and fall through to the caller's unknown-player response.
-            }
-        });
-        return resolvedUuid.get();
+    /** Runs on the lookup thread: for a name the server has not seen this is a web request. */
+    private static Optional<UUID> lookUpProfile(String playerName) {
+        var server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return Optional.empty();
+        return server.getProfileCache().get(playerName).map(GameProfile::getId);
     }
 }

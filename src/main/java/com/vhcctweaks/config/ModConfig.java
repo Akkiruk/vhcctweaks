@@ -2,8 +2,6 @@ package com.vhcctweaks.config;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 
-import java.util.List;
-
 public class ModConfig {
     public static final ForgeConfigSpec SERVER_SPEC;
 
@@ -19,12 +17,11 @@ public class ModConfig {
     public static final ForgeConfigSpec.IntValue CCVAULT_INTERACTION_STALE_SECONDS;
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_HISTORY_RESULTS;
 
+    // vhcc file API
+    public static final ForgeConfigSpec.LongValue VHCC_MAX_BYTES_PER_COMPUTER;
+
     // Computer lock
     public static final ForgeConfigSpec.BooleanValue COMPUTER_LOCK_ENABLED;
-
-    // Remote control
-    public static final ForgeConfigSpec.BooleanValue REMOTE_CONTROL_ENABLED;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> REMOTE_CONTROL_ALLOWED_PLAYERS;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -64,21 +61,16 @@ public class ModConfig {
                 .defineInRange("maxHistoryResults", 50, 1, 200);
         builder.pop();
 
+        builder.comment("The vhcc file API. Each computer has its own private folder.").push("vhccFiles");
+        VHCC_MAX_BYTES_PER_COMPUTER = builder
+                .comment("Disk space one computer's folder may use. Every file and folder counts as at least 4 KB.")
+                .defineInRange("maxBytesPerComputer", 16L << 20, 1L << 20, Long.MAX_VALUE);
+        builder.pop();
+
         builder.comment("Owner-only computers, set per computer with ccvault.setTerminalLock").push("computerLock");
         COMPUTER_LOCK_ENABLED = builder
                 .comment("Enforce computer locks. Off lets everyone in, without forgetting which computers are locked.")
                 .define("enabled", true);
-        builder.pop();
-
-        builder.comment("Remote control of computers through /vhcc pc, used by the client debug tool.",
-                         "Lets a listed player read, type into, reprogram and run code on any loaded computer.",
-                         "Every call is logged to vhcc_data/remote/audit.log.").push("remoteControl");
-        REMOTE_CONTROL_ENABLED = builder
-                .comment("Enable remote control on this server. The owner of a singleplayer world never needs this.")
-                .define("enabled", true);
-        REMOTE_CONTROL_ALLOWED_PLAYERS = builder
-                .comment("Player names or UUIDs allowed to use it. Being listed is the whole check: no op level is needed.")
-                .defineListAllowEmpty(List.of("allowedPlayers"), () -> List.of("Akkiruk"), value -> value instanceof String);
         builder.pop();
 
         SERVER_SPEC = builder.build();

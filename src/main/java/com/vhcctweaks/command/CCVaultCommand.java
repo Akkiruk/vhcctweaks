@@ -13,7 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Registers /ccvault commands:
- *   /ccvault approve <nonce>    — Approve a pending auth request (clickable from chat)
+ *   /ccvault approve <nonce>    — Approve a pending auth or host claim request (clickable from chat)
  *   /ccvault revoke <computerId> — Revoke your session with a terminal
  */
 public class CCVaultCommand {
@@ -42,22 +42,22 @@ public class CCVaultCommand {
     }
 
     private static int handleApprove(ServerPlayer player, String nonce) {
-        if (SessionAuthManager.approveNonce(player.getUUID(), nonce)) {
-            int idleMinutes = ModConfig.CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES.get();
-            player.sendMessage(
-                    new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
-                            .append(new TextComponent("Terminal authorized until you disconnect or go "
-                                    + idleMinutes + " minutes idle.")
-                                    .withStyle(ChatFormatting.GREEN)),
-                    player.getUUID());
-            return 1;
-        } else {
-            player.sendMessage(
-                    new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
-                            .append(new TextComponent("Invalid or expired approval code.").withStyle(ChatFormatting.RED)),
-                    player.getUUID());
-            return 0;
-        }
+        SessionAuthManager.Approval approval = SessionAuthManager.approveNonce(player.getUUID(), nonce);
+        // Someone else claimed it first: the offer is simply over
+        if (approval == SessionAuthManager.Approval.TAKEN) return 0;
+
+        String text = switch (approval) {
+            case SESSION -> "Terminal authorized until you disconnect or go "
+                    + ModConfig.CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES.get() + " minutes idle.";
+            case HOST -> "You are now this computer's host.";
+            default -> "Invalid or expired approval code.";
+        };
+        boolean approved = approval != SessionAuthManager.Approval.INVALID;
+        player.sendMessage(
+                new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
+                        .append(new TextComponent(text).withStyle(approved ? ChatFormatting.GREEN : ChatFormatting.RED)),
+                player.getUUID());
+        return approved ? 1 : 0;
     }
 
     private static int handleRevoke(ServerPlayer player, int computerId) {

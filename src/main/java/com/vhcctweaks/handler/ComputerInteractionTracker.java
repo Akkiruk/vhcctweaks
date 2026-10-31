@@ -3,39 +3,33 @@ package com.vhcctweaks.handler;
 import com.vhcctweaks.VHCCTweaks;
 import com.vhcctweaks.ccvault.SessionAuthManager;
 import com.vhcctweaks.config.ModConfig;
-import com.vhcctweaks.remote.RemoteControl;
-import dan200.computercraft.shared.computer.core.ServerComputer;
+import com.vhcctweaks.mixin.TileMonitorAccessor;
+import dan200.computercraft.shared.computer.blocks.TileComputerBase;
 import dan200.computercraft.shared.computer.inventory.ContainerComputerBase;
 import dan200.computercraft.shared.peripheral.monitor.TileMonitor;
 import dan200.computercraft.shared.pocket.items.ItemPocketComputer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
-import java.util.*;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tracks which player last interacted with each CC:Tweaked computer,
  * including placed blocks, monitors, and pocket computers.
  *
- * Supports monitor clicks: when a player right-clicks a CC monitor,
- * the tracker walks the multi-block monitor structure and finds the
- * adjacent computer to associate the interaction with. Pocket computers
- * are registered on item use and then refreshed while a computer menu
- * is open so long-lived sessions do not go stale mid-interaction, but
- * their permanent host owner is claimed explicitly by installer flows.
+ * A monitor click counts for every computer attached to that monitor, however it is attached.
+ * Pocket computers are registered on item use, and any computer menu is refreshed while it is open
+ * so long-lived sessions do not go stale mid-interaction.
  */
 public class ComputerInteractionTracker {
 
@@ -46,11 +40,12 @@ public class ComputerInteractionTracker {
     // computer ID → player UUID → that player's own last interaction, for several players at one table
     private static final Map<Integer, Map<UUID, Long>> playerTimestamps = new ConcurrentHashMap<>();
 
-    /**
-     * Max monitor blocks to traverse in BFS. A full 16x16 monitor is 256 blocks,
-     * so leave headroom for large valid multiblocks while still bounding traversal.
-     */
-    private static final int MAX_MONITOR_BFS = 512;
+    /** Computer IDs restart with each world, so nothing here may carry over to the next one. */
+    public static void reset() {
+        computerToPlayer.clear();
+        interactionTimestamps.clear();
+        playerTimestamps.clear();
+    }
 
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
@@ -58,35 +53,33 @@ public class ComputerInteractionTracker {
             if (event.getWorld().isClientSide()) return;
             if (!(event.getPlayer() instanceof ServerPlayer player)) return;
 
-            BlockPos pos = event.getPos();
-            Level level = event.getWorld();
-
-            // Only care about CC:Tweaked blocks
-            ResourceLocation blockId = level.getBlockState(pos).getBlock().getRegistryName();
-            if (blockId == null || !blockId.getNamespace().equals("computercraft")) return;
-
-            // Read the computer ID from the block entity via reflection
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be == null) return;
-
-            int computerId = ComputerReflectionHelper.getComputerIdFromBlockEntity(be);
-
-            // If the clicked block is a monitor (no computer ID), find the connected computer
-            if (computerId < 0 && blockId.getPath().contains("monitor")) {
-                computerId = findComputerAdjacentToMonitor(level, pos);
-            }
-
-            recordInteraction(player, computerId, true);
-
-            // Queued before CC queues monitor_touch, so a script always sees who before where.
-            // These are CC's own conditions for a touch, so the two events always come as a pair.
-            if (be instanceof TileMonitor monitor && event.getHand() == InteractionHand.MAIN_HAND
-                    && !player.isCrouching() && event.getFace() == monitor.getFront()) {
-                ServerComputer computer = RemoteControl.find(level.getServer(), computerId);
-                if (computer != null) computer.queueEvent("vhcc_touch", new Object[]{player.getGameProfile().getName()});
+            BlockEntity be = event.getWorld().getBlockEntity(event.getPos());
+            if (be instanceof TileComputerBase computer) {
+                recordInteraction(player, computer.getComputerID());
+                offerIfUnowned(player, computer, event.getHand());
+            } else if (be instanceof TileMonitor monitor) {
+                // Queued before CC queues monitor_touch, so a script always sees who before where.
+                // These are CC's own conditions for a touch, so the two events always come as a pair.
+                boolean touch = event.getHand() == InteractionHand.MAIN_HAND
+                        && !player.isCrouching() && event.getFace() == monitor.getFront();
+                ((TileMonitorAccessor) (Object) monitor).vhcctweaks$eachComputer(computer -> {
+                    recordInteraction(player, computer.getID());
+                    if (touch) computer.queueEvent("vhcc_touch", player.getGameProfile().getName());
+                });
             }
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing right-click: {}", e.getMessage());
+        }
+    }
+
+    /** The event fires once per hand, and a crouching click places a block instead of using the computer. */
+    private static void offerIfUnowned(ServerPlayer player, TileComputerBase computer, InteractionHand hand) {
+        if (hand != InteractionHand.MAIN_HAND || player.isCrouching() || player instanceof FakePlayer) return;
+
+        // A computer placed by a command has no ID until something needs one
+        int computerId = computer.getComputerID() >= 0 ? computer.getComputerID() : computer.createServerComputer().getID();
+        if (ComputerPlacementTracker.getOwner(computerId) == null) {
+            SessionAuthManager.offerHost(player, computerId);
         }
     }
 
@@ -105,7 +98,7 @@ public class ComputerInteractionTracker {
                 computerId = pocketComputer.createServerComputer(level, player, player.getInventory(), stack).getID();
             }
 
-            recordInteraction(player, computerId, false);
+            recordInteraction(player, computerId);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error processing pocket use: {}", e.getMessage());
         }
@@ -118,58 +111,17 @@ public class ComputerInteractionTracker {
         if (!(player.containerMenu instanceof ContainerComputerBase menu)) return;
 
         try {
-            recordInteraction(player, menu.getComputer().getID(), false);
+            int computerId = menu.getComputer().getID();
+            UUID last = computerToPlayer.get(computerId);
+            // Leaving a terminal open must not take the computer from someone tapping its monitor
+            if (last == null || last.equals(player.getUUID()) || !isRecent(interactionTimestamps.get(computerId))) {
+                recordInteraction(player, computerId);
+            } else {
+                refreshPlayer(player.getUUID(), computerId);
+            }
         } catch (Exception e) {
             VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: error refreshing menu session: {}", e.getMessage());
         }
-    }
-
-    /**
-     * BFS through connected monitor blocks, checking all adjacent non-monitor
-     * positions for a computer block entity. Handles multi-block monitors of any size.
-     *
-     * @return the first computer ID found adjacent to the monitor, or -1
-     */
-    private static int findComputerAdjacentToMonitor(Level level, BlockPos startPos) {
-        Set<BlockPos> visited = new HashSet<>();
-        Deque<BlockPos> queue = new ArrayDeque<>();
-        queue.add(startPos);
-        visited.add(startPos);
-
-        while (!queue.isEmpty()) {
-            BlockPos current = queue.poll();
-
-            for (Direction dir : Direction.values()) {
-                BlockPos neighbor = current.relative(dir);
-                if (visited.contains(neighbor)) continue;
-
-                BlockEntity neighborBe = level.getBlockEntity(neighbor);
-                if (neighborBe == null) continue;
-
-                ResourceLocation neighborId = level.getBlockState(neighbor).getBlock().getRegistryName();
-                if (neighborId == null || !neighborId.getNamespace().equals("computercraft")) continue;
-
-                // Check if this neighbor is a computer (has getComputerID)
-                int id = ComputerReflectionHelper.getComputerIdFromBlockEntity(neighborBe);
-                if (id >= 0) return id;
-
-                // If it's another monitor block, continue BFS through the multi-block
-                if (neighborId.getPath().contains("monitor")) {
-                    visited.add(neighbor);
-                    queue.add(neighbor);
-                }
-            }
-
-            if (visited.size() > MAX_MONITOR_BFS) break;
-        }
-
-        return -1;
-    }
-
-    @SubscribeEvent
-    public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        // No-op: getPlayer resolves through the live server player list instead of caching
-        // ServerPlayer instances, which avoids stale references across reconnects.
     }
 
     /**
@@ -192,42 +144,30 @@ public class ComputerInteractionTracker {
      * Used by CCVault for financial operations where a stale interaction is a security risk.
      */
     public static ServerPlayer getFreshPlayer(int computerId) {
-        Long timestamp = interactionTimestamps.get(computerId);
-        if (timestamp == null) return null;
-        long staleMs = ModConfig.CCVAULT_INTERACTION_STALE_SECONDS.get() * 1000L;
-        if (System.currentTimeMillis() - timestamp > staleMs) return null;
-        return getPlayer(computerId);
+        return isRecent(interactionTimestamps.get(computerId)) ? getPlayer(computerId) : null;
     }
 
     /** Whether this player touched this computer within the staleness window, whoever touched it last. */
     public static boolean isFresh(int computerId, UUID playerUuid) {
         Map<UUID, Long> players = playerTimestamps.get(computerId);
-        Long timestamp = players == null ? null : players.get(playerUuid);
+        return players != null && isRecent(players.get(playerUuid));
+    }
+
+    private static boolean isRecent(Long timestamp) {
         if (timestamp == null) return false;
         return System.currentTimeMillis() - timestamp <= ModConfig.CCVAULT_INTERACTION_STALE_SECONDS.get() * 1000L;
     }
 
-    /** Get the UUID of the player who last interacted, regardless of staleness. */
-    public static UUID getPlayerUuid(int computerId) {
-        return computerToPlayer.get(computerId);
-    }
-
-    private static void recordInteraction(ServerPlayer player, int computerId, boolean assignOwnerIfMissing) {
+    private static void recordInteraction(ServerPlayer player, int computerId) {
         if (computerId < 0) return;
 
         computerToPlayer.put(computerId, player.getUUID());
-        long now = System.currentTimeMillis();
-        interactionTimestamps.put(computerId, now);
-        playerTimestamps.computeIfAbsent(computerId, id -> new ConcurrentHashMap<>()).put(player.getUUID(), now);
-        SessionAuthManager.touchSession(player.getUUID(), computerId);
+        interactionTimestamps.put(computerId, System.currentTimeMillis());
+        refreshPlayer(player.getUUID(), computerId);
+    }
 
-        // Block computers still claim ownership on first interaction.
-        if (assignOwnerIfMissing && ComputerPlacementTracker.getOwner(computerId) == null) {
-            UUID hostUuid = player.getUUID();
-            if (ComputerPlacementTracker.setOwner(computerId, hostUuid)) {
-                VHCCTweaks.LOGGER.info("CCVault: Computer {} assigned host {} on first interaction",
-                        computerId, hostUuid);
-            }
-        }
+    private static void refreshPlayer(UUID playerUuid, int computerId) {
+        playerTimestamps.computeIfAbsent(computerId, id -> new ConcurrentHashMap<>()).put(playerUuid, System.currentTimeMillis());
+        SessionAuthManager.touchSession(playerUuid, computerId);
     }
 }

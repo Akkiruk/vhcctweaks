@@ -4,7 +4,24 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- `ccvault.claimHost()` now takes a chat click: it sends a `[CONFIRM]` prompt and the claim happens when the player clicks, so it returns before the claim lands. Scripts that expected an immediate result need updating.
+- Added `ccvault.forgetHost()`, which clears a computer's host and lifts its terminal lock.
+- Computers are owned by whoever places them. The first click no longer takes ownership, and tapping a monitor never does.
+- A placed computer with no host offers itself in chat with a `[CLAIM]` button on every right-click, until someone takes it. An offer never takes a computer that already has a host.
+- `vhcc_data` now lives in the world folder, and owners, locks, sessions and ledgers no longer leak between worlds whose computer IDs overlap. The first world started after updating takes over the old instance-wide folder.
+- Each computer now has a private `vhcc` folder at `vhcc_data/computers/<id>`, with a disk allowance set by `vhccFiles.maxBytesPerComputer` (16 MB by default). Files written to the shared folder by older versions stay on disk but are no longer visible to scripts.
+- `getPlayerBalance` no longer blocks computers on a Mojang lookup. The first call for an unseen name can answer "try again" while it resolves in the background.
+- Monitor clicks and `vhcc_touch` now reach every computer attached to the monitor, including through wired modems, instead of guessing from adjacent blocks.
+- Leaving a terminal open no longer takes the "player" role from someone tapping that computer's monitor.
+- `owners.json` and `locks.json` are saved atomically, and a damaged one is set aside instead of stopping the mod from loading.
+- A line cut short by a crash no longer breaks ledger lookups, startup or the next entry.
+- `verifyTransaction` reads the player's own history instead of the whole ledger, and both sides of a player-to-player transfer can now see it.
+- `/vhcc pc put` refuses to run without an upload instead of emptying the target file.
+- Removed the `remoteControl` config. Any player can now use `/vhcc pc`, on any server. Every call is still audited, and a remotely controlled computer still refuses transfers for anyone but the controller until it reboots.
+- Removed the write-ahead log recovery, which nothing has written since 2.2.34. Any intent file still present is reported in the log at startup for an admin to settle.
+- Removed the legacy research cleanup and the reflection helper, and corrected docs that described a rate limiter and self-play behaviour the mod does not have.
+- Documented the `computerLock.enabled` config, added in 2.2.34. Turning it off lets everyone in without forgetting which computers are locked.
+- Added unit tests, run by `gradlew build`.
 
 ## [2.2.34] - 2026-10-30
 

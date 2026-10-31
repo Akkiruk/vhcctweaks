@@ -45,8 +45,7 @@ import java.util.stream.Stream;
  * seq is chosen by the caller and echoed in the reply, which comes back as one private chat line:
  *   [vhcc-rc] {"seq":7,"ok":true,...}
  *
- * Access comes from the allow list alone, checked in guarded(): a server's admins may hold their rights
- * through a permissions mod, with no vanilla op level for a requires() to see.
+ * Any player may use it.
  *
  * Commands instead of a network channel keep this server-side only: a client without the mod still
  * connects, and the checkClientPacketSafety build rule stays intact.
@@ -119,18 +118,12 @@ public class RemoteCommand {
         return Commands.<CommandSourceStack>literal(name).then(id().executes(guarded(name, action)));
     }
 
-    /** Every action passes through here: a player, on the allow list, logged, and always answered. */
+    /** Every action passes through here: a player, logged, and always answered. */
     private static com.mojang.brigadier.Command<CommandSourceStack> guarded(String name, Action action) {
         return ctx -> {
             ServerPlayer player = ctx.getSource().getPlayerOrException();
             JsonObject reply = new JsonObject();
             reply.addProperty("seq", IntegerArgumentType.getInteger(ctx, "seq"));
-            if (!RemoteControl.isAllowed(player)) {
-                reply.addProperty("ok", false);
-                reply.addProperty("error", "remote control is not enabled for you on this server");
-                RemoteControl.send(player, reply);
-                return 0;
-            }
             try {
                 RemoteControl.audit(player, name, describe(ctx));
                 action.run(ctx, player, reply);
@@ -333,6 +326,8 @@ public class RemoteCommand {
     private static void putFile(CommandContext<CommandSourceStack> ctx, ServerPlayer player, JsonObject reply) throws IOException {
         Path file = path(ctx);
         byte[] data = RemoteControl.takeBuffer(player.getUUID());
+        // A retried put arrives with the buffer already used. Writing that would empty the file.
+        if (data.length == 0) throw new IOException("nothing uploaded to write");
         Files.createDirectories(file.getParent());
         Files.write(file, data);
         reply.addProperty("written", data.length);

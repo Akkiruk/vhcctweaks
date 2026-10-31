@@ -1,6 +1,6 @@
 package com.vhcctweaks.api;
 
-import com.vhcctweaks.VHCCTweaks;
+import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.remote.RemoteControl;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
@@ -14,8 +14,9 @@ import java.util.stream.Stream;
 
 /**
  * General-purpose local filesystem API exposed as "vhcc" to all CC:Tweaked computers.
- * All operations are sandboxed inside a configurable root directory.
- * Works in singleplayer and on servers (writes to the server/instance folder).
+ * Each computer gets its own folder at vhcc_data/computers/&lt;id&gt; and cannot see any other,
+ * and that folder has a disk allowance (vhccFiles.maxBytesPerComputer).
+ * Works in singleplayer and on servers (writes to the world folder).
  *
  * Lua usage:
  *   vhcc.write("mydata/log.txt", "hello world")
@@ -36,10 +37,8 @@ public class VHCCTweaksAPI implements ILuaAPI {
     private static final Pattern SAFE_SEGMENT = Pattern.compile("^[a-zA-Z0-9_\\-][a-zA-Z0-9_\\-.]{0,127}$");
     private static final long MAX_WRITE_SIZE = 1024 * 1024; // 1 MB per write
     private static final int MAX_PATH_DEPTH = 16;
-    // The mod's own records live under the same root. A forged WAL intent would mint tokens at the next restart.
-    private static final Set<String> RESERVED_ROOTS = Set.of("ccvault", "remote");
 
-    private static Path rootDir;
+    private static volatile Path rootDir;
     private final int computerId;
 
     public VHCCTweaksAPI(int computerId) {
@@ -92,31 +91,42 @@ public class VHCCTweaksAPI implements ILuaAPI {
                         "' - use letters, numbers, dashes, underscores, dots");
             }
         }
-        for (String seg : segments) {
-            if (seg.isEmpty()) continue;
-            // Windows ignores case and trailing dots, so "CCVault." is the same folder
-            if (RESERVED_ROOTS.contains(seg.toLowerCase(Locale.ROOT).replaceAll("\\.+$", ""))) {
-                throw new LuaException("vhcc: '" + seg + "' is reserved");
-            }
-            break;
+    }
+
+    private Path computerRoot() throws LuaException {
+        Path root = rootDir;
+        if (root == null) {
+            throw new LuaException("vhcc: root directory not configured");
         }
+        return root.resolve("computers").resolve(Integer.toString(computerId)).normalize();
     }
 
     private Path resolve(String path) throws LuaException {
-        if (rootDir == null) {
-            throw new LuaException("vhcc: root directory not configured");
-        }
+        Path root = computerRoot();
         validatePath(path);
 
         String normalized = path.replace('\\', '/');
-        Path resolved = rootDir.resolve(normalized).normalize();
+        Path resolved = root.resolve(normalized).normalize();
 
         // Final containment check
-        if (!resolved.startsWith(rootDir.normalize())) {
+        if (!resolved.startsWith(root)) {
             throw new LuaException("vhcc: path escapes sandbox");
         }
 
         return resolved;
+    }
+
+    /** Refuses a change that would leave the computer's folder over its allowance. */
+    private void requireSpace(Path target, long newBytes) throws LuaException {
+        try {
+            long oldCost = Files.isRegularFile(target) ? FileQuota.cost(Files.size(target)) : 0;
+            long limit = ModConfig.VHCC_MAX_BYTES_PER_COMPUTER.get();
+            if (!FileQuota.fits(FileQuota.usage(computerRoot()), oldCost, newBytes, limit)) {
+                throw new LuaException("vhcc: out of space (limit " + (limit / 1024) + " KB per computer)");
+            }
+        } catch (IOException e) {
+            throw new LuaException("vhcc: could not check space - " + e.getMessage());
+        }
     }
 
     // ===== API Functions =====
@@ -149,14 +159,12 @@ public class VHCCTweaksAPI implements ILuaAPI {
      */
     @LuaFunction
     public final boolean write(String path, String content) throws LuaException {
-        if (content != null && content.length() > MAX_WRITE_SIZE) {
-            throw new LuaException("vhcc: content too large (max " + (MAX_WRITE_SIZE / 1024) + " KB)");
-        }
+        byte[] bytes = encode(content);
         Path target = resolve(path);
+        requireSpace(target, bytes.length);
         try {
             Files.createDirectories(target.getParent());
-            Files.writeString(target, content != null ? content : "",
-                    StandardCharsets.UTF_8,
+            Files.write(target, bytes,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING);
             return true;
@@ -172,20 +180,26 @@ public class VHCCTweaksAPI implements ILuaAPI {
      */
     @LuaFunction
     public final boolean append(String path, String content) throws LuaException {
-        if (content != null && content.length() > MAX_WRITE_SIZE) {
-            throw new LuaException("vhcc: content too large (max " + (MAX_WRITE_SIZE / 1024) + " KB)");
-        }
+        byte[] bytes = encode(content);
         Path target = resolve(path);
         try {
+            requireSpace(target, (Files.isRegularFile(target) ? Files.size(target) : 0) + bytes.length);
             Files.createDirectories(target.getParent());
-            Files.writeString(target, content != null ? content : "",
-                    StandardCharsets.UTF_8,
+            Files.write(target, bytes,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.APPEND);
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: append failed - " + e.getMessage());
         }
+    }
+
+    private static byte[] encode(String content) throws LuaException {
+        byte[] bytes = (content != null ? content : "").getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_WRITE_SIZE) {
+            throw new LuaException("vhcc: content too large (max " + (MAX_WRITE_SIZE / 1024) + " KB)");
+        }
+        return bytes;
     }
 
     /**
@@ -261,10 +275,9 @@ public class VHCCTweaksAPI implements ILuaAPI {
     public final Map<Integer, String> list(String path) throws LuaException {
         Path target;
         if (path == null || path.isEmpty() || path.equals("/")) {
-            if (rootDir == null) {
-                throw new LuaException("vhcc: root directory not configured");
-            }
-            target = rootDir;
+            target = computerRoot();
+            // Created by the first write, so a computer that has written nothing has an empty root
+            if (!Files.exists(target)) return new HashMap<>();
         } else {
             target = resolve(path);
         }
@@ -301,6 +314,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
     @LuaFunction
     public final boolean makeDir(String path) throws LuaException {
         Path target = resolve(path);
+        requireSpace(target, 0);
         try {
             Files.createDirectories(target);
             return true;
@@ -378,6 +392,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
             throw new LuaException("vhcc: destination already exists - " + to);
         }
         try {
+            requireSpace(dest, Files.size(source));
             Files.createDirectories(dest.getParent());
             Files.copy(source, dest);
             return true;

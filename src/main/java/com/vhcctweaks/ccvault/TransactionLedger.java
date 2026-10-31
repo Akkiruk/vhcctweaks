@@ -1,11 +1,12 @@
 package com.vhcctweaks.ccvault;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParseException;
 import com.vhcctweaks.VHCCTweaks;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,9 +15,10 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Append-only double-entry ledger for all CCVault transactions.
- * Each transfer logs both the debit and credit side.
- * Stored as one JSON object per line (JSONL) in vhcc_data/ccvault/ledger/transactions.jsonl
+ * Append-only ledger of all CCVault transactions, one JSON object per line.
+ * The full record is vhcc_data/ccvault/ledger/transactions.jsonl, and each player involved in a
+ * transaction also gets a copy in ledger/participants, so a lookup never has to read everyone's history.
+ * A line a crash cut short is skipped when read.
  */
 public class TransactionLedger {
 
@@ -28,11 +30,16 @@ public class TransactionLedger {
         ledgerFile = dataDir.resolve("ccvault").resolve("ledger").resolve("transactions.jsonl");
         participantHistoryDir = ledgerFile.getParent().resolve("participants");
         try {
-            Files.createDirectories(ledgerFile.getParent());
             Files.createDirectories(participantHistoryDir);
+            endLastLine(ledgerFile);
+            try (var files = Files.list(participantHistoryDir)) {
+                for (Path file : (Iterable<Path>) files::iterator) {
+                    endLastLine(file);
+                }
+            }
             rebuildParticipantIndexesIfNeeded();
         } catch (IOException e) {
-            VHCCTweaks.LOGGER.error("CCVault: Failed to create ledger directory", e);
+            VHCCTweaks.LOGGER.error("CCVault: Failed to prepare ledger directory", e);
         }
     }
 
@@ -53,11 +60,7 @@ public class TransactionLedger {
                 hostUuid != null ? hostUuid.toString() : null,
                 Instant.now().toString()
         );
-        appendEntry(entry);
-        appendParticipantEntry(playerUuid, entry);
-        if (hostUuid != null && !hostUuid.equals(playerUuid)) {
-            appendParticipantEntry(hostUuid, entry);
-        }
+        appendEntry(entry, participants(fromUuid, toUuid, playerUuid, hostUuid));
     }
 
     /**
@@ -77,56 +80,27 @@ public class TransactionLedger {
                 rejectionReason,
                 Instant.now().toString()
         );
-        appendEntry(entry);
-        if (playerUuid != null) {
-            appendParticipantEntry(playerUuid, entry);
-        }
-    }
-
-    public static boolean hasTransaction(String txId) {
-        if (ledgerFile == null || !Files.exists(ledgerFile)) return false;
-
-        try (BufferedReader reader = Files.newBufferedReader(ledgerFile, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.contains(txId)) continue;
-                Map<?, ?> entry = GSON.fromJson(line, Map.class);
-                if (entry == null) continue;
-
-                String entryTxId = stringVal(entry, "txId");
-                if (txId.equals(entryTxId)) {
-                    return true;
-                }
-            }
-        } catch (IOException e) {
-            VHCCTweaks.LOGGER.error("CCVault: Failed to read ledger for transaction lookup", e);
-        }
-
-        return false;
+        appendEntry(entry, participants(playerUuid));
     }
 
     /**
      * Look up a single transaction by ID. Returns a map suitable for Lua, or null if not found.
-     * Only returns the entry if the given participantUuid was involved (player or host).
+     * Only returns the entry if the given participantUuid was involved.
      */
     public static Map<String, Object> findTransaction(String txId, UUID participantUuid) {
-        if (ledgerFile == null || !Files.exists(ledgerFile)) return null;
-        String participantStr = participantUuid.toString();
+        Path file = participantHistoryFile(participantUuid);
+        if (file == null || !Files.exists(file)) file = ledgerFile;
+        if (file == null || !Files.exists(file)) return null;
 
-        try (BufferedReader reader = Files.newBufferedReader(ledgerFile, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (!line.contains(txId)) continue;
-                Map<?, ?> entry = GSON.fromJson(line, Map.class);
-                if (entry == null) continue;
-
-                String entryTxId = stringVal(entry, "txId");
-                if (!txId.equals(entryTxId)) continue;
+                Map<?, ?> entry = parseLine(line);
+                if (entry == null || !txId.equals(stringVal(entry, "txId"))) continue;
 
                 // Security filter: participant must be involved
-                String playerUuid = stringVal(entry, "playerUuid");
-                String hostUuid = stringVal(entry, "hostUuid");
-                if (!participantStr.equals(playerUuid) && !participantStr.equals(hostUuid)) continue;
+                if (!entryParticipants(entry).contains(participantUuid)) continue;
 
                 return toLuaMap(entry);
             }
@@ -137,7 +111,7 @@ public class TransactionLedger {
     }
 
     /**
-     * Get the last N transactions involving a given participant (player or host UUID).
+     * Get the last N transactions involving a given participant.
      * Returns a list of maps suitable for Lua tables.
      */
     public static List<Map<String, Object>> getHistory(UUID participantUuid, int limit) {
@@ -145,11 +119,11 @@ public class TransactionLedger {
 
         Path participantFile = participantHistoryFile(participantUuid);
         if (participantFile != null && Files.exists(participantFile)) {
-            return readHistoryFile(participantFile, limit);
+            return readHistoryFile(participantFile, limit, null);
         }
 
         if (ledgerFile == null || !Files.exists(ledgerFile)) return Collections.emptyList();
-        return readHistoryFile(ledgerFile, limit, participantUuid.toString());
+        return readHistoryFile(ledgerFile, limit, participantUuid);
     }
 
     private static String stringVal(Map<?, ?> map, String key) {
@@ -167,26 +141,49 @@ public class TransactionLedger {
         return result;
     }
 
-    private static synchronized void appendEntry(Object entry) {
-        if (ledgerFile == null) return;
+    private static Map<?, ?> parseLine(String line) {
         try {
-            String line = GSON.toJson(entry) + "\n";
+            return GSON.fromJson(line, Map.class);
+        } catch (JsonParseException e) {
+            VHCCTweaks.LOGGER.warn("CCVault: Skipping unreadable ledger line");
+            return null;
+        }
+    }
+
+    private static Set<UUID> participants(UUID... uuids) {
+        Set<UUID> participants = new LinkedHashSet<>();
+        for (UUID uuid : uuids) {
+            if (uuid != null) participants.add(uuid);
+        }
+        return participants;
+    }
+
+    private static Set<UUID> entryParticipants(Map<?, ?> entry) {
+        return participants(uuidVal(entry, "from"), uuidVal(entry, "to"),
+                uuidVal(entry, "playerUuid"), uuidVal(entry, "hostUuid"));
+    }
+
+    private static synchronized void appendEntry(Object entry, Set<UUID> participants) {
+        if (ledgerFile == null) return;
+        String line = GSON.toJson(entry) + "\n";
+        try {
             Files.writeString(ledgerFile, line, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to write ledger entry", e);
         }
+        for (UUID participant : participants) {
+            appendParticipantLine(participant, line);
+        }
     }
 
-    private static void appendParticipantEntry(UUID participantUuid, Object entry) {
-        if (participantUuid == null) return;
-
+    private static void appendParticipantLine(UUID participantUuid, String line) {
         Path participantFile = participantHistoryFile(participantUuid);
         if (participantFile == null) return;
 
         try {
             Files.createDirectories(participantFile.getParent());
-            Files.writeString(participantFile, GSON.toJson(entry) + "\n", StandardCharsets.UTF_8,
+            Files.writeString(participantFile, line, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to write participant ledger for {}", participantUuid, e);
@@ -198,26 +195,15 @@ public class TransactionLedger {
         return participantHistoryDir.resolve(participantUuid + ".jsonl");
     }
 
-    private static List<Map<String, Object>> readHistoryFile(Path file, int limit) {
-        return readHistoryFile(file, limit, null);
-    }
-
-    private static List<Map<String, Object>> readHistoryFile(Path file, int limit, String participantStr) {
+    private static List<Map<String, Object>> readHistoryFile(Path file, int limit, UUID participantUuid) {
         LinkedList<Map<String, Object>> results = new LinkedList<>();
 
         try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (participantStr != null && !line.contains(participantStr)) continue;
-
-                Map<?, ?> entry = GSON.fromJson(line, Map.class);
+                Map<?, ?> entry = parseLine(line);
                 if (entry == null) continue;
-
-                if (participantStr != null) {
-                    String playerUuid = stringVal(entry, "playerUuid");
-                    String hostUuid = stringVal(entry, "hostUuid");
-                    if (!participantStr.equals(playerUuid) && !participantStr.equals(hostUuid)) continue;
-                }
+                if (participantUuid != null && !entryParticipants(entry).contains(participantUuid)) continue;
 
                 results.addLast(toLuaMap(entry));
                 if (results.size() > limit) {
@@ -229,6 +215,15 @@ public class TransactionLedger {
         }
 
         return results;
+    }
+
+    /** A crash can leave a file ending mid-line. Without this the next entry would be glued onto that line and lost too. */
+    private static void endLastLine(Path file) throws IOException {
+        if (!Files.exists(file) || Files.size(file) == 0) return;
+        try (RandomAccessFile access = new RandomAccessFile(file.toFile(), "rw")) {
+            access.seek(access.length() - 1);
+            if (access.read() != '\n') access.write('\n');
+        }
     }
 
     private static void rebuildParticipantIndexesIfNeeded() throws IOException {
@@ -243,17 +238,11 @@ public class TransactionLedger {
         try (BufferedReader reader = Files.newBufferedReader(ledgerFile, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
-                Map<?, ?> entry = GSON.fromJson(line, Map.class);
+                Map<?, ?> entry = parseLine(line);
                 if (entry == null) continue;
 
-                UUID playerUuid = uuidVal(entry, "playerUuid");
-                UUID hostUuid = uuidVal(entry, "hostUuid");
-
-                if (playerUuid != null) {
-                    appendParticipantEntry(playerUuid, entry);
-                }
-                if (hostUuid != null && !hostUuid.equals(playerUuid)) {
-                    appendParticipantEntry(hostUuid, entry);
+                for (UUID participant : entryParticipants(entry)) {
+                    appendParticipantLine(participant, line + "\n");
                 }
             }
         }

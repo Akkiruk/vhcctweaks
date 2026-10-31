@@ -173,7 +173,7 @@ local id = ccvault.getComputerId()
 
 -- getSessionInfo() -> table
 -- Returns rich metadata about the current session.
--- Very useful for detecting self-play, checking rate limits, etc.
+-- Very useful for detecting self-play.
 
 local info = ccvault.getSessionInfo()
 
@@ -200,9 +200,8 @@ end
 -- When player == host (you're playing your own game), normal transfer()
 -- blocks self-transfers. Use transferSelf() instead.
 --
--- The transfer goes through the full pipeline (WAL, ledger, rate limiter)
--- so you can test everything, but the net balance effect is zero.
--- All self-transfers are tagged with "[test]" in the ledger.
+-- It checks the balance and writes a ledger entry tagged "[self-play]",
+-- but no tokens move.
 
 local info2 = ccvault.getSessionInfo()
 if info2.isSelfPlay then
@@ -313,9 +312,10 @@ end
 --  "not authenticated — call ccvault.requestAuth() first"
 --      The player hasn't approved this terminal yet. Send requestAuth().
 --
---  "computer has no registered owner - interact with it once to register"
---      The computer has not been used yet, or ownership was never recorded.
---      Use it once to register the host account.
+--  "computer has no registered owner - right-click it and claim it in chat, or call ccvault.claimHost()"
+--      Nobody owns this computer. Whoever places a computer owns it. A placed
+--      computer with no owner offers itself in chat on every right-click.
+--      Pocket computers need claimHost(), which the player confirms in chat.
 --
 --  "insufficient balance"
 --      Source account doesn't have enough tokens.
@@ -335,14 +335,8 @@ end
 --  "amount exceeds maximum (1000000)"
 --      Server config caps single transfers. Default is 1M tokens.
 --
---  "terminal rate limit exceeded"
---      Too many transfers from this computer. Default: 10/min.
---
---  "player rate limit exceeded"
---      This player is making too many transfers total. Default: 20/min.
---
 --  "economy system not available"
---      Dog's PlayerShops isn't installed or didn't load.
+--      ParadiseCore isn't installed, or its database is down.
 --
 --  "could not read balance"
 --      Dog's API returned an error. Might be a server issue.
@@ -401,9 +395,8 @@ end
 -- * You cannot send tokens to/from arbitrary UUIDs or player names.
 -- * You cannot create tokens from nothing (no "add" or "mint").
 -- * You cannot destroy tokens (no "remove" or "burn").
--- * You cannot read balances without the player authenticating.
 -- * You cannot forge the authentication prompt (it's a server chat message).
--- * You cannot bypass rate limits.
+-- * You cannot make a player the host without their chat confirmation.
 -- * You cannot exceed the per-transfer cap set by the server.
 -- * You cannot operate on a player who hasn't recently interacted.
 -- * Every transfer is permanently logged in a server-side ledger.

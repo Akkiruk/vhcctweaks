@@ -3,7 +3,6 @@ package com.vhcctweaks.remote;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.vhcctweaks.VHCCTweaks;
-import com.vhcctweaks.config.ModConfig;
 import dan200.computercraft.core.terminal.Terminal;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.core.ServerContext;
@@ -30,11 +29,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Lets an allowed admin drive any loaded computer through /vhcc pc. Every call is written to an audit log.
+ * Lets any player drive any loaded computer through /vhcc pc. Every call is written to an audit log.
  *
  * Security model:
- * - Off on a dedicated server until remoteControl.enabled is set and the player is on remoteControl.allowedPlayers.
- *   The owner of a singleplayer world is always allowed.
  * - Remote input does not count as a player interaction, so it cannot open or refresh a CCVault session.
  * - A computer that was driven remotely refuses CCVault transfers for anyone but the controller until it reboots.
  */
@@ -57,6 +54,9 @@ public final class RemoteControl {
     private RemoteControl() {}
 
     public static void init(Path dataDir) {
+        controllers.clear();
+        buffers.clear();
+        pending.clear();
         Path dir = dataDir.resolve("remote");
         try {
             Files.createDirectories(dir);
@@ -64,22 +64,6 @@ public final class RemoteControl {
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("Remote control: could not create the audit log folder", e);
         }
-    }
-
-    // ---- access ----
-
-    public static boolean isAllowed(ServerPlayer player) {
-        MinecraftServer server = player.getServer();
-        if (server != null && !server.isDedicatedServer() && server.isSingleplayerOwner(player.getGameProfile())) {
-            return true;
-        }
-        if (!ModConfig.REMOTE_CONTROL_ENABLED.get()) return false;
-        String uuid = player.getUUID().toString();
-        String name = player.getGameProfile().getName();
-        for (String entry : ModConfig.REMOTE_CONTROL_ALLOWED_PLAYERS.get()) {
-            if (entry.equalsIgnoreCase(uuid) || entry.equalsIgnoreCase(name)) return true;
-        }
-        return false;
     }
 
     /** Refusing to write the audit line refuses the action: nothing here may run unlogged. */

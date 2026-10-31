@@ -22,11 +22,6 @@ VH CC Tweaks surgically addresses every one of these issues while keeping normal
 
 ## Features
 
-### Vault Research Cleanup
-- Removes legacy **CC: Tweaked** and **Advanced Peripherals** research entries from Vault config JSON on startup
-- Cleans previously injected research-group entries, GUI styles, and skill descriptions so old installs self-heal
-- Keeps CC/AP progression controlled through recipe changes, vault protection, and AP config restrictions instead of extra VH research nodes
-
 ### Vault Dimension Protection
 - Blocks **placement**, **interaction**, **use**, **mining**, and **breaking** of all CC:Tweaked and Advanced Peripherals blocks inside vaults
 - Fires at `EventPriority.HIGHEST` to intercept before any other mod
@@ -83,7 +78,7 @@ On startup, the mod patches AP config files to disable overpowered features:
 ### Custom Lua API (`vhcc`)
 A sandboxed filesystem API exposed to all CC:Tweaked computers as the `vhcc` global:
 
-**Server-side operations** (read/write to `<instance>/vhcc_data/`):
+**Server-side operations** (each computer has a private folder, `<world>/vhcc_data/computers/<id>/`):
 ```lua
 vhcc.write("path/file.txt", "content")     -- create/overwrite
 vhcc.append("path/file.txt", "more\n")     -- append
@@ -97,14 +92,14 @@ vhcc.exists("path"), vhcc.isDir("path"), vhcc.getSize("path")
 vhcc.isAvailable(), vhcc.getBasePath()
 ```
 
-**Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16-level depth limit, allowlist character set.
+**Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16 MB per computer (`vhccFiles.maxBytesPerComputer`), 16-level depth limit, allowlist character set.
 
 ### CCVault Economy API (`ccvault`)
 A server-authoritative economy API that lets CC:Tweaked computers move **Vault Tokens** (from the ParadiseCore economy) between players. Designed for in-game shops, casinos, and trading terminals.
 
 **Core concepts:**
 - **`"player"`** - the person currently using the terminal (right-clicked it)
-- **`"host"`** - the person who placed the computer block
+- **`"host"`** - the person who placed the computer, or who confirmed `ccvault.claimHost()` in chat. Permanent until `ccvault.forgetHost()` or another confirmed claim
 - Every debit has an equal credit - no tokens are created or destroyed
 - All transfers are permanently logged with TX IDs, amounts, parties, reason, and timestamp
 
@@ -112,9 +107,8 @@ A server-authoritative economy API that lets CC:Tweaked computers move **Vault T
 - **Click-to-approve authentication** - server sends an unforgeable `[APPROVE]` chat message; scripts cannot fake it
 - **Session-style auth grants** - approvals stay active for a player/computer pair until disconnect or 10 minutes idle
 - **Read-only public balance checks** - scripts can inspect any known player's current balance without auth, while transfers remain auth-gated
-- **Rate limiting** - per-terminal (10/min) and per-player (20/min) caps prevent abuse
-- **Crash-safe transfers** - Write-Ahead Log ensures incomplete transfers auto-recover on restart
-- **Double-entry ledger** - all transactions are permanently recorded
+- **Atomic transfers** - the economy moves both balances in one database transaction
+- **Transaction ledger** - all transactions are permanently recorded
 - **Player commands** - `/ccvault approve <code>` and `/ccvault revoke <computerId>`
 
 ```lua
@@ -192,17 +186,16 @@ src/main/java/com/vhcctweaks/
 |-- ccvault/
 |   |-- CCVaultAPI.java                  # Lua economy API (ccvault global)
 |   |-- EconomyBridge.java               # ParadiseCore economy integration
-|   |-- RateLimiter.java                 # Per-terminal & per-player rate limits
-|   |-- SessionAuthManager.java          # Click-to-approve auth sessions
-|   |-- TransactionLedger.java           # Double-entry transaction log
-|   `-- TransferService.java             # Crash-safe token transfers (WAL)
+|   |-- PlayerLookup.java                # Player names to UUIDs without blocking
+|   |-- SessionAuthManager.java          # Click-to-approve sessions and host claims
+|   |-- TransactionLedger.java           # Transaction log
+|   `-- TransferService.java             # Atomic token transfers
 |-- command/
 |   `-- CCVaultCommand.java              # /ccvault approve & revoke commands
 |-- config/ModConfig.java                # Forge config spec
 |-- handler/
 |   |-- ComputerInteractionTracker.java  # Player->Computer right-click mapping
 |   |-- ComputerPlacementTracker.java    # Computer->Owner placement mapping
-|   |-- ComputerReflectionHelper.java    # Shared CC reflection utilities
 |   `-- VaultProtectionHandler.java      # Vault dimension block
 |-- mixin/
 |   |-- RecipeResolverMixin.java         # JEI impostor recipe suppression

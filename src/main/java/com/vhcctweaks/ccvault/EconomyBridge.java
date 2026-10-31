@@ -21,8 +21,6 @@ public class EconomyBridge {
     // Cached reflection handles
     private static Method isAvailable;  // boolean isAvailable()
     private static Method getBalance;   // long getBalance(UUID)
-    private static Method deposit;      // boolean deposit(UUID, long)
-    private static Method withdraw;     // boolean withdraw(UUID, long)
     private static Method transfer;     // boolean transfer(UUID, UUID, long)
 
     private EconomyBridge() {}
@@ -34,8 +32,6 @@ public class EconomyBridge {
             Class<?> api = Class.forName(API_CLASS);
             isAvailable = api.getMethod("isAvailable");
             getBalance = api.getMethod("getBalance", UUID.class);
-            deposit = api.getMethod("deposit", UUID.class, long.class);
-            withdraw = api.getMethod("withdraw", UUID.class, long.class);
             transfer = api.getMethod("transfer", UUID.class, UUID.class, long.class);
             available = true;
             VHCCTweaks.LOGGER.info("CCVault: ParadiseCore economy found and cached");
@@ -73,16 +69,6 @@ public class EconomyBridge {
         }
     }
 
-    /** Add tokens to a UUID's balance. Returns true on success. */
-    public static boolean add(UUID uuid, long amount) {
-        return call(deposit, "deposit", uuid, amount);
-    }
-
-    /** Remove tokens from a UUID's balance. Returns true on success. */
-    public static boolean remove(UUID uuid, long amount) {
-        return call(withdraw, "withdraw", uuid, amount);
-    }
-
     /** Move tokens as one transaction: either both balances change or neither does. */
     public static boolean transfer(UUID from, UUID to, long amount) {
         if (!isAvailable() || amount <= 0) return false;
@@ -90,16 +76,6 @@ public class EconomyBridge {
             return (Boolean) transfer.invoke(null, from, to, amount);
         } catch (Exception e) {
             VHCCTweaks.LOGGER.error("CCVault: transfer({}, {}, {}) failed", from, to, amount, e);
-            return false;
-        }
-    }
-
-    private static boolean call(Method method, String name, UUID uuid, long amount) {
-        if (!isAvailable() || amount <= 0) return false;
-        try {
-            return (Boolean) method.invoke(null, uuid, amount);
-        } catch (Exception e) {
-            VHCCTweaks.LOGGER.error("CCVault: {}({}, {}) failed", name, uuid, amount, e);
             return false;
         }
     }

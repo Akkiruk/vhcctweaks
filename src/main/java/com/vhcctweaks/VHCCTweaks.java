@@ -17,9 +17,10 @@ import com.vhcctweaks.remote.RemoteControl;
 import com.vhcctweaks.detail.VaultItemDetailProvider;
 import dan200.computercraft.api.ComputerCraftAPI;
 import dan200.computercraft.api.detail.DetailRegistries;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
@@ -28,6 +29,8 @@ import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Mod(VHCCTweaks.MOD_ID)
@@ -51,31 +54,15 @@ public class VHCCTweaks {
         // Command registration and server start events
         MinecraftForge.EVENT_BUS.register(VHCCTweaks.class);
 
-        // Patch VH config files early (adds blacklist entries and removes the legacy
-        // CC/AP research injections)
+        // Patch VH config files early (adds blacklist entries and tunes Advanced Peripherals)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
         // Patch CC:Tweaked monitor sizes and sync managed CraftTweaker scripts for both
         // integrated and dedicated-server folder layouts.
         VaultConfigPatcher.patchGameConfigsIfNeeded(FMLPaths.GAMEDIR.get());
 
-        // Data directory for all vhcctweaks persistent storage
-        Path dataDir = FMLPaths.GAMEDIR.get().resolve("vhcc_data");
-
-        // Register custom Lua API for CC:Tweaked computers
-        // Server-side: vhcc.write/read/etc. sandboxed to <instance>/vhcc_data/
-        VHCCTweaksAPI.setRootDir(dataDir);
+        // Register custom Lua APIs for CC:Tweaked computers
         ComputerCraftAPI.registerAPIFactory(computer -> new VHCCTweaksAPI(computer.getID()));
-
-        // CCVault economy system init
-        SessionAuthManager.init(dataDir);
-        ComputerPlacementTracker.init(dataDir);
-        ComputerLock.init(dataDir);
-        TransactionLedger.init(dataDir);
-        TransferService.init(dataDir);
         ComputerCraftAPI.registerAPIFactory(computer -> new CCVaultAPI(computer.getID()));
-
-        // Remote control for allowed admins, driven by /vhcc pc
-        RemoteControl.init(dataDir);
 
         // Vault item detail provider — enriches getItemDetail() with VH item data
         DetailRegistries.ITEM_STACK.addProvider(new VaultItemDetailProvider());
@@ -87,15 +74,31 @@ public class VHCCTweaks {
         RemoteCommand.register(event.getDispatcher());
     }
 
+    /** Computer IDs belong to a world, so everything keyed by them is stored with it and loaded fresh for it. */
     @SubscribeEvent
-    public static void onServerStarted(ServerStartedEvent event) {
-        // Run WAL crash recovery after server is fully loaded
-        TransferService.recover();
-        LOGGER.info("CCVault: WAL recovery complete");
-        LOGGER.info("Remote control of computers: {}, {} listed players, audit log in vhcc_data/remote/audit.log",
-                ModConfig.REMOTE_CONTROL_ENABLED.get() ? "ON" : "OFF",
-                ModConfig.REMOTE_CONTROL_ALLOWED_PLAYERS.get().size());
+    public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+        Path dataDir = event.getServer().getWorldPath(LevelResource.ROOT).resolve("vhcc_data").toAbsolutePath().normalize();
+        adoptInstanceData(FMLPaths.GAMEDIR.get().resolve("vhcc_data").toAbsolutePath().normalize(), dataDir);
+
+        VHCCTweaksAPI.setRootDir(dataDir);
+        SessionAuthManager.reset();
+        ComputerInteractionTracker.reset();
+        ComputerPlacementTracker.init(dataDir);
+        ComputerLock.init(dataDir);
+        TransactionLedger.init(dataDir);
+        TransferService.init(dataDir);
+        RemoteControl.init(dataDir);
     }
 
-
+    /** Versions before 2.2.35 kept one vhcc_data per instance. The first world started after updating takes it over. */
+    private static void adoptInstanceData(Path instanceData, Path worldData) {
+        if (!Files.isDirectory(instanceData) || Files.exists(worldData)) return;
+        try {
+            Files.createDirectories(worldData.getParent());
+            Files.move(instanceData, worldData);
+            LOGGER.info("Moved {} to {}", instanceData, worldData);
+        } catch (IOException e) {
+            LOGGER.error("Could not move {} to {}: this world starts with no owners, locks or ledger", instanceData, worldData, e);
+        }
+    }
 }

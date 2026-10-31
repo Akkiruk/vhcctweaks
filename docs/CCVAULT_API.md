@@ -16,7 +16,7 @@
 CCVault lets ComputerCraft scripts move **Vault Tokens** between two parties:
 
 - **`"player"`** — the person currently using the terminal (right-clicked a block or used a pocket computer)
-- **`"host"`** — the person who first registered the computer
+- **`"host"`** — the computer's owner: whoever placed it, or whoever confirmed `ccvault.claimHost()`. This is permanent until `ccvault.forgetHost()` is called or another player confirms a claim
 
 That's it. No raw UUIDs, no arbitrary targeting, no creating or destroying tokens. Every debit has an equal credit. The server controls everything — your script just asks nicely.
 
@@ -111,6 +111,8 @@ end
 
 `getPlayerBalance(playerName)` is read-only and resolves an online player name, a cached/offline profile name, or a direct UUID string without requiring terminal auth. It can inspect balances, but it cannot move tokens or modify any wallet state.
 
+It never waits on the network. The first call for an offline player can return `nil, "looking up player 'Name' - try again"` while the name is resolved in the background, so call it again a moment later.
+
 ```lua
 local bal, err = ccvault.getPlayerBalance("Akkiruk")
 if bal then
@@ -160,8 +162,32 @@ result.txId     -- "18f3a2b0-4c7e..."  (unique transaction ID)
 | `ccvault.getComputerId()` | `number` | No |
 
 - **`getPlayerName()`** — username of whoever last interacted. `nil` if nobody has.
-- **`getHostName()`** — username of whoever first registered the computer. Returns UUID string if owner is offline. `nil` if unregistered.
+- **`getHostName()`** — the computer owner's username. Returns UUID string if owner is offline. `nil` if there is no owner.
 - **`getComputerId()`** — this computer's CC ID. Show this to players so they can run `/ccvault revoke <id>` if needed.
+
+### Host Ownership
+
+| Function | Returns | Auth Required |
+|----------|---------|:---:|
+| `ccvault.claimHost()` | `{success, hostName, computerId}` \| `nil, message` | No |
+| `ccvault.forgetHost()` | `boolean` | No |
+
+Whoever places a computer becomes its host, and ownership is permanent. A labelled computer keeps its host wherever it is placed next. Pocket computers have no host until they are claimed.
+
+A placed computer with no host, such as one placed by a command or after `forgetHost()`, offers itself in chat with a `[CLAIM]` button every time someone right-clicks it. The first player to click becomes the host. An offer only ever claims a computer with no host: once one is set, older offers silently do nothing and the offers stop.
+
+**`claimHost()`** asks the interacting player to become the host. It sends them a `[CONFIRM]` chat message and returns `nil, "confirm the host claim in chat"`: the claim happens when they click, not when the call returns. It can take a computer from its current host, and that host is not asked. Watch `getSessionInfo().isSelfPlay` to see the claim land. If the player is already the host it returns a table straight away.
+
+```lua
+local result, message = ccvault.claimHost()
+while not result and not ccvault.getSessionInfo().isSelfPlay do
+    print(message)
+    sleep(1)
+    message = "Waiting for you to confirm in chat..."
+end
+```
+
+**`forgetHost()`** clears the host and lifts any terminal lock, and returns whether there was a host. Any script on the computer can call it. The next player to place the computer or confirm a claim becomes the host.
 
 ---
 
@@ -191,14 +217,10 @@ local info = ccvault.getSessionInfo()
 -- info.hostName              string?  computer owner's name (nil if unregistered)
 -- info.isSelfPlay            boolean  true if player == host (test mode)
 -- info.authenticated         boolean  whether current session is authenticated
--- info.transfersRemaining    number   min of terminal + player budget
--- info.terminalTransfersRemaining  number  terminal rate limit remaining
--- info.playerTransfersRemaining    number  player rate limit remaining
 ```
 
 Useful for:
 - Detecting test/self-play mode server-authoritatively
-- Showing rate limit warnings before they hit
 - Display UI without needing auth first
 
 ---
@@ -209,7 +231,7 @@ Useful for:
 |----------|---------|:---:|
 | `ccvault.transferSelf(amount, reason)` | `{success, txId, testMode}` \| `nil, error` | **Yes** |
 
-Executes a real transfer where player and host are the same account. Goes through the full pipeline (WAL, ledger, rate limiter) with net-zero balance effect. Tagged as `[test]` in the ledger.
+Simulates a transfer where player and host are the same account. It checks the balance and writes a ledger entry tagged `[self-play]`, but no tokens move.
 
 **Only works when player == host.** Returns an error otherwise.
 
@@ -298,7 +320,7 @@ end
 |-------|---------|
 | `no player interacting with this computer` | Nobody has interacted yet |
 | `not authenticated — call ccvault.requestAuth() first` | Player hasn't approved this terminal |
-| `computer has no registered owner - interact with it once to register` | Use the computer once to register ownership |
+| `computer has no registered owner - right-click it and claim it in chat, or call ccvault.claimHost()` | Nobody owns this computer yet |
 | `insufficient balance` | Source doesn't have enough tokens |
 | `amount must be positive` | You passed 0 or negative |
 | `cannot transfer to self` | `from` and `to` are the same |
@@ -306,11 +328,8 @@ end
 | `reason is required` | Must provide a reason string |
 | `reason too long (max 64 chars)` | Shorten the reason |
 | `amount exceeds maximum (1000000)` | Over the per-transfer cap |
-| `terminal rate limit exceeded` | Too many transfers from this computer (default: 10/min) |
-| `player rate limit exceeded` | Player making too many transfers (default: 20/min) |
 | `economy system not available` | ParadiseCore not installed, or its database is down |
 | `this computer was remotely controlled - reboot it before moving tokens` | An admin drove this computer through `/vhcc pc`; a reboot clears it |
-| `transfer partially failed — will be recovered automatically` | Server crashed mid-transfer; WAL will fix it on restart |
 
 ---
 
@@ -337,8 +356,6 @@ end
 |---------|---------|-------------|
 | Auth nonce expiry | 60 seconds | How long the [APPROVE] button stays valid |
 | Max transfer amount | 1,000,000 | Per-transaction cap |
-| Terminal rate limit | 10/min | Max transfers per computer per minute |
-| Player rate limit | 20/min | Max transfers per player per minute |
 | Interaction staleness | 30 seconds | A recent interaction or pocket use must still be fresh for financial ops |
 | Max history results | 50 | Max entries returned by getTransactionHistory |
 
@@ -353,16 +370,15 @@ Server admins can change all of these in the vhcctweaks server config.
 - ❌ Send tokens to/from arbitrary UUIDs or player names
 - ❌ Create tokens from nothing
 - ❌ Destroy tokens
-- ❌ Read balances without player authentication
 - ❌ Forge the authentication prompt
-- ❌ Bypass rate limits or transfer caps
+- ❌ Become host for a player without their chat confirmation
+- ❌ Bypass the transfer cap
 - ❌ Operate on a player who hasn't recently interacted
 
 **The server guarantees:**
 
-- ✅ Every debit has an equal credit (double-entry ledger)
+- ✅ Every debit has an equal credit: the economy moves both balances in one database transaction
 - ✅ All transfers are permanently logged with TX ID, amounts, parties, reason, and timestamp
-- ✅ Crash-safe execution via Write-Ahead Log (incomplete transfers auto-recover on restart)
 - ✅ Auth prompts are unforgeable server chat messages with clickable approve buttons
 - ✅ Transaction history is filtered to only show the requesting player's own data
 - ✅ Self-transfers are explicitly tagged as test mode in the ledger

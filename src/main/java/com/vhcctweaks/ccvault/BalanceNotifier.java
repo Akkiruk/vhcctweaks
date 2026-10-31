@@ -21,12 +21,8 @@ import java.util.UUID;
  *   <li><b>Credit</b>: tokens added (transfers from another player)</li>
  * </ul>
  *
- * <p>Self-play (player == host) handling:
- * <ul>
- *   <li>No real money moves — all operations are simulated</li>
- *   <li>Chat messages describe what WOULD happen, tagged with [Self-Play]</li>
- *   <li>Balance is never modified, preventing duplication/loss bugs</li>
- * </ul>
+ * <p>Self-play (player == host) goes through ccvault.transferSelf, which moves no money:
+ * chat messages describe what WOULD happen, tagged with [Self-Play].
  */
 public class BalanceNotifier {
 

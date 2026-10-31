@@ -15,6 +15,11 @@
 - `docs/` for API references and Lua stubs
 - `.vscode/release.ps1` for the formal versioned release flow
 
+## Testing
+
+- `gradlew.bat build` runs the unit tests in `src/test`. They do not prove mixins or event handlers.
+- Test in the real game yourself: launch it, drive it and read the results. See the `ingame-testing` skill. `node tools/mcbridge/rc-vhcc.mjs` in the craftos-agent repo is the end-to-end suite for this mod; extend it with each change.
+
 ## Build And Deploy
 
 - Use `scripts/build-and-deploy-vhcctweaks.ps1` only for intermediate local validation before the final release step.

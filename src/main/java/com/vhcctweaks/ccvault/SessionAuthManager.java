@@ -9,6 +9,7 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -54,26 +55,35 @@ public class SessionAuthManager {
         INVALID,
         SESSION,
         HOST,
-        TAKEN
+        TAKEN,
+        ALLOWANCE
     }
 
-    /** What a click grants: a session, the host role from ccvault.claimHost, or an unowned computer offered on right-click. */
+    /**
+     * What a click grants: a session, the host role from ccvault.claimHost, an unowned computer offered on
+     * right-click, or a spending allowance from ccvault.requestAllowance.
+     */
     enum Request {
         SESSION,
         CLAIM,
-        OFFER
+        OFFER,
+        ALLOWANCE
     }
 
     /** An authenticated session for a computer. */
     private record AuthSession(long lastActivityAt) {}
 
-    /** A pending request waiting for the player to click. */
-    private record PendingAuth(UUID playerUuid, int computerId, long expiresAt, Request request) {}
+    /** What a spending allowance request asks for. */
+    record AllowanceAsk(int requestId, String playerName, long maxTokens, int minutes) {}
+
+    /** A pending request waiting for the player to click. ask is set only for an allowance. */
+    private record PendingAuth(UUID playerUuid, int computerId, long expiresAt, Request request, AllowanceAsk ask) {}
 
     /** Computer IDs restart with each world, so nothing here may carry over to the next one. */
     public static void reset() {
         computerSessions.clear();
         pendingNonces.clear();
+        AllowanceManager.reset();
     }
 
     /**
@@ -155,6 +165,25 @@ public class SessionAuthManager {
                 "[CLAIM]", "Click to become this computer's host");
     }
 
+    /**
+     * Ask a player in chat to let this computer charge them up to maxTokens over the next minutes.
+     * Returns the request id, or -1 when a request from this computer is already waiting for this player.
+     * The computer hears back with ccvault_allowance when they click or the request expires.
+     */
+    public static int requestAllowance(ServerPlayer player, int computerId, String computerName, String ownerName,
+                                       long maxTokens, int minutes) {
+        long now = System.currentTimeMillis();
+        cleanupPendingNonces(now);
+        if (hasPending(player.getUUID(), computerId, Request.ALLOWANCE, now)) return -1;
+
+        AllowanceAsk ask = new AllowanceAsk(AllowanceManager.nextRequestId(), player.getGameProfile().getName(), maxTokens, minutes);
+        String text = computerName + " (owner " + ownerName + ") asks to charge you up to " + maxTokens
+                + " tokens over " + minutes + " minutes ";
+        sendPrompt(player, computerId, Request.ALLOWANCE, ask, text, "[APPROVE]",
+                "Click to let this computer charge you without asking again, up to that amount");
+        return ask.requestId();
+    }
+
     private static boolean hasPending(UUID playerUuid, int computerId, Request request, long now) {
         for (PendingAuth pending : pendingNonces.values()) {
             if (pending.playerUuid().equals(playerUuid)
@@ -168,14 +197,23 @@ public class SessionAuthManager {
     }
 
     static String addPending(UUID playerUuid, int computerId, long expiresAt, Request request) {
+        return addPending(playerUuid, computerId, expiresAt, request, null);
+    }
+
+    static String addPending(UUID playerUuid, int computerId, long expiresAt, Request request, AllowanceAsk ask) {
         String nonce = generateNonce();
-        pendingNonces.put(nonce, new PendingAuth(playerUuid, computerId, expiresAt, request));
+        pendingNonces.put(nonce, new PendingAuth(playerUuid, computerId, expiresAt, request, ask));
         return nonce;
     }
 
     private static void sendPrompt(ServerPlayer player, int computerId, Request request, String text, String button, String hover) {
+        sendPrompt(player, computerId, request, null, text, button, hover);
+    }
+
+    private static void sendPrompt(ServerPlayer player, int computerId, Request request, AllowanceAsk ask,
+                                   String text, String button, String hover) {
         long expiryMs = ModConfig.CCVAULT_NONCE_EXPIRY_SECONDS.get() * 1000L;
-        String nonce = addPending(player.getUUID(), computerId, System.currentTimeMillis() + expiryMs, request);
+        String nonce = addPending(player.getUUID(), computerId, System.currentTimeMillis() + expiryMs, request, ask);
 
         MutableComponent msg = new TextComponent("")
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
@@ -200,11 +238,20 @@ public class SessionAuthManager {
         if (pending == null) return Approval.INVALID;
         if (!pending.playerUuid().equals(playerUuid)) return Approval.INVALID;
         if (pending.expiresAt() < now) {
-            pendingNonces.remove(nonce, pending);
+            if (pendingNonces.remove(nonce, pending)) expired(pending);
             return Approval.INVALID;
         }
         if (!pendingNonces.remove(nonce, pending)) {
             return Approval.INVALID;
+        }
+
+        if (pending.request() == Request.ALLOWANCE) {
+            AllowanceAsk ask = pending.ask();
+            AllowanceManager.grant(pending.computerId(), playerUuid, ask.maxTokens(), now + ask.minutes() * 60_000L);
+            AllowanceManager.notify(pending.computerId(), ask.requestId(), ask.playerName(), true);
+            VHCCTweaks.LOGGER.info("CCVault: Player {} allowed computer {} to charge up to {} over {} minutes",
+                    playerUuid, pending.computerId(), ask.maxTokens(), ask.minutes());
+            return Approval.ALLOWANCE;
         }
 
         if (pending.request() == Request.OFFER && !ComputerPlacementTracker.setOwner(pending.computerId(), playerUuid)) {
@@ -227,14 +274,46 @@ public class SessionAuthManager {
     public static void revokeSession(UUID playerUuid, int computerId) {
         Map<UUID, AuthSession> sessions = computerSessions.get(computerId);
         if (sessions != null) sessions.remove(playerUuid);
+        AllowanceManager.end(computerId, playerUuid);
+    }
+
+    /** /ccvault revoke with no computer: every session and allowance this player has given. */
+    public static void revokeAll(UUID playerUuid) {
+        computerSessions.values().forEach(sessions -> sessions.remove(playerUuid));
+        AllowanceManager.endAll(playerUuid);
     }
 
     /**
-     * Clear all auth state for a player when they disconnect.
+     * Clear all auth state for a player when they disconnect. A pending allowance request is answered "not approved".
      */
     public static void clearPlayerSessions(UUID playerUuid) {
         computerSessions.values().forEach(sessions -> sessions.remove(playerUuid));
-        pendingNonces.values().removeIf(p -> p.playerUuid().equals(playerUuid));
+        removePendingWhere(p -> p.playerUuid().equals(playerUuid));
+        AllowanceManager.endAll(playerUuid);
+    }
+
+    /** Every few ticks, while allowance requests wait: an expired one tells its computer it was not approved. */
+    @SubscribeEvent
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || ++expiryTicks < 10) return;
+        expiryTicks = 0;
+        if (!pendingNonces.isEmpty()) cleanupPendingNonces(System.currentTimeMillis());
+    }
+
+    private static int expiryTicks;
+
+    private static void removePendingWhere(java.util.function.Predicate<PendingAuth> test) {
+        for (Map.Entry<String, PendingAuth> entry : pendingNonces.entrySet()) {
+            if (test.test(entry.getValue()) && pendingNonces.remove(entry.getKey(), entry.getValue())) {
+                expired(entry.getValue());
+            }
+        }
+    }
+
+    /** A request that will never be clicked. Only an allowance request has a computer waiting to hear. */
+    private static void expired(PendingAuth pending) {
+        if (pending.request() != Request.ALLOWANCE) return;
+        AllowanceManager.notify(pending.computerId(), pending.ask().requestId(), pending.ask().playerName(), false);
     }
 
     @SubscribeEvent
@@ -262,7 +341,7 @@ public class SessionAuthManager {
         return now - session.lastActivityAt() > idleTimeoutMs;
     }
 
-    private static void cleanupPendingNonces(long now) {
-        pendingNonces.values().removeIf(p -> p.expiresAt() < now);
+    static void cleanupPendingNonces(long now) {
+        removePendingWhere(p -> p.expiresAt() < now);
     }
 }

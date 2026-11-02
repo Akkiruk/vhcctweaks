@@ -16,6 +16,15 @@ public class ModConfig {
     public static final ForgeConfigSpec.LongValue CCVAULT_MAX_TRANSFER_AMOUNT;
     public static final ForgeConfigSpec.IntValue CCVAULT_INTERACTION_STALE_SECONDS;
     public static final ForgeConfigSpec.IntValue CCVAULT_MAX_HISTORY_RESULTS;
+    public static final ForgeConfigSpec.IntValue CCVAULT_MAX_ALLOWANCE_MINUTES;
+
+    // Linked ender modems
+    public static final ForgeConfigSpec.IntValue LINKS_MAX_PER_COMPUTER;
+
+    // Batch inventory methods and change events
+    public static final ForgeConfigSpec.IntValue INVENTORY_MAX_BATCH_MOVES;
+    public static final ForgeConfigSpec.IntValue INVENTORY_BATCH_TIME_BUDGET_MICROS;
+    public static final ForgeConfigSpec.IntValue INVENTORY_MAX_WATCHES_PER_COMPUTER;
 
     // vhcc file API
     public static final ForgeConfigSpec.LongValue VHCC_MAX_BYTES_PER_COMPUTER;
@@ -55,10 +64,32 @@ public class ModConfig {
         CCVAULT_INTERACTION_STALE_SECONDS = builder
                 .comment("How many seconds before a player interaction with a computer is considered stale.",
                          "Financial operations require a fresh interaction within this window.")
-                .defineInRange("interactionStaleSeconds", 30, 5, 300);
+                .defineInRange("interactionStaleSeconds", 30, 5, 3600);
         CCVAULT_MAX_HISTORY_RESULTS = builder
                 .comment("Maximum number of transaction history entries a script can retrieve at once.")
                 .defineInRange("maxHistoryResults", 50, 1, 200);
+        CCVAULT_MAX_ALLOWANCE_MINUTES = builder
+                .comment("The longest spending allowance a player can be asked for with ccvault.requestAllowance.")
+                .defineInRange("maxAllowanceMinutes", 240, 1, 10080);
+        builder.pop();
+
+        builder.comment("Linked ender modems: a computer uses another computer's peripherals as if wired in").push("links");
+        LINKS_MAX_PER_COMPUTER = builder
+                .comment("How many computers one computer can link to at once.")
+                .defineInRange("maxLinksPerComputer", 64, 1, 1024);
+        builder.pop();
+
+        builder.comment("Batch inventory methods and inventory change events").push("inventory");
+        INVENTORY_MAX_BATCH_MOVES = builder
+                .comment("The most moves one moveMany call may ask for.")
+                .defineInRange("maxBatchMoves", 256, 1, 4096);
+        INVENTORY_BATCH_TIME_BUDGET_MICROS = builder
+                .comment("moveMany stops early once a batch has used this much server time in one tick, in microseconds.",
+                         "The program calls again with the moves that are left.")
+                .defineInRange("batchTimeBudgetMicros", 2000, 50, 50000);
+        INVENTORY_MAX_WATCHES_PER_COMPUTER = builder
+                .comment("How many inventories one computer can watch for inventory_changed at once.")
+                .defineInRange("maxWatchesPerComputer", 64, 1, 1024);
         builder.pop();
 
         builder.comment("The vhcc file API. Each computer has its own private folder.").push("vhccFiles");

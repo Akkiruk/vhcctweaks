@@ -5,7 +5,9 @@ import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerLock;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
+import com.vhcctweaks.link.ComputerIndex;
 import com.vhcctweaks.remote.RemoteControl;
+import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
@@ -204,10 +206,16 @@ public class CCVaultAPI implements ILuaAPI {
             return new Object[]{null, "reason too long (max " + MAX_REASON_LENGTH + " chars)"};
         }
 
-        UUID fromUuid = resolveTarget(from);
-        UUID toUuid = resolveTarget(to);
+        // The host paying a named player costs that player nothing, so it needs no fresh touch from them
+        UUID toUuid = from.equalsIgnoreCase("host") && isNamed(to) ? resolveNamedPayee(to) : resolveTarget(to);
+
+        // A named player who gave this computer an allowance can be charged by it with no fresh touch, up to what is
+        // left. Reserved here, before anything else can fail, and settled after the transfer.
+        UUID allowancePlayer = isNamed(from) && to.equalsIgnoreCase("host") ? reserveAllowance(from, amount) : null;
+        UUID fromUuid = allowancePlayer != null ? allowancePlayer : resolveTarget(from);
 
         if (fromUuid.equals(toUuid)) {
+            if (allowancePlayer != null) AllowanceManager.settle(computerId, allowancePlayer, amount, false);
             return new Object[]{null, "cannot transfer to yourself — player and host are the same account"};
         }
 
@@ -215,11 +223,19 @@ public class CCVaultAPI implements ILuaAPI {
         UUID hostUuid = ComputerPlacementTracker.getOwner(computerId);
 
         if (RemoteControl.blocksTransfer(computerId, playerUuid)) {
+            if (allowancePlayer != null) AllowanceManager.settle(computerId, allowancePlayer, amount, false);
             return new Object[]{null, "this computer was remotely controlled - reboot it before moving tokens"};
         }
 
-        TransferService.TransferResult result = TransferService.execute(
-                fromUuid, toUuid, amount, reason, computerId, playerUuid, hostUuid);
+        TransferService.TransferResult result;
+        boolean charged = false;
+        try {
+            result = TransferService.execute(fromUuid, toUuid, amount, reason, computerId, playerUuid, hostUuid);
+            charged = result.success();
+        } finally {
+            // A refused or crashed transfer gives the reserved amount back; a used-up allowance ends
+            if (allowancePlayer != null) AllowanceManager.settle(computerId, allowancePlayer, amount, charged);
+        }
 
         if (result.success()) {
             Map<String, Object> response = new HashMap<>();
@@ -229,6 +245,70 @@ public class CCVaultAPI implements ILuaAPI {
         } else {
             return new Object[]{null, result.error()};
         }
+    }
+
+    // ===== Spending allowance =====
+
+    /**
+     * Ask a player, in one chat prompt, to let this computer charge them up to maxTokens over the next minutes with
+     * no fresh touch. Returns a request id at once. The answer comes as ccvault_allowance(requestId, playerName,
+     * approved): true when they click, false when the prompt expires or they leave first.
+     *
+     * Lua: local id = ccvault.requestAllowance("Steve", 500, 60)
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] requestAllowance(String playerName, long maxTokens, int minutes) throws LuaException {
+        if (playerName == null || playerName.isBlank()) throw new LuaException("player is required");
+        if (maxTokens <= 0) throw new LuaException("maxTokens must be positive");
+        int maxMinutes = ModConfig.CCVAULT_MAX_ALLOWANCE_MINUTES.get();
+        if (minutes < 1 || minutes > maxMinutes) throw new LuaException("minutes must be between 1 and " + maxMinutes);
+
+        ServerPlayer player = onlinePlayer(playerName.trim());
+        if (player == null) throw new LuaException("player '" + playerName.trim() + "' is not online");
+        UUID owner = ComputerPlacementTracker.getOwner(computerId);
+        if (owner == null) throw new LuaException(OWNER_REGISTRATION_MESSAGE);
+
+        int requestId = SessionAuthManager.requestAllowance(player, computerId, computerName(), nameOf(owner), maxTokens, minutes);
+        if (requestId < 0) {
+            throw new LuaException("an allowance request to '" + player.getGameProfile().getName() + "' is already waiting");
+        }
+        return new Object[]{requestId};
+    }
+
+    /**
+     * What is left of a player's allowance here: remaining tokens and seconds left, or nil if there is none.
+     * Lua: local remaining, secondsLeft = ccvault.getAllowance("Steve")
+     */
+    @LuaFunction
+    public final Object[] getAllowance(String playerName) {
+        ServerPlayer player = playerName == null ? null : onlinePlayer(playerName.trim());
+        long[] allowance = player == null ? null : AllowanceManager.get(computerId, player.getUUID(), System.currentTimeMillis());
+        return allowance == null ? new Object[]{null} : new Object[]{allowance[0], allowance[1]};
+    }
+
+    /**
+     * End a player's allowance here. Returns whether there was one.
+     * Lua: ccvault.endAllowance("Steve")
+     */
+    @LuaFunction
+    public final boolean endAllowance(String playerName) {
+        ServerPlayer player = playerName == null ? null : onlinePlayer(playerName.trim());
+        return player != null && AllowanceManager.end(computerId, player.getUUID());
+    }
+
+    /** The label players see in an allowance prompt. */
+    private String computerName() {
+        ServerComputer computer = ComputerIndex.get(computerId);
+        String label = computer == null ? null : computer.getLabel();
+        return label != null && !label.isBlank() ? label : "Computer #" + computerId;
+    }
+
+    private static String nameOf(UUID uuid) {
+        var server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return uuid.toString();
+        ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+        if (online != null) return online.getGameProfile().getName();
+        return server.getProfileCache().get(uuid).map(GameProfile::getName).orElse(uuid.toString());
     }
 
     // ===== Info =====
@@ -531,17 +611,39 @@ public class CCVaultAPI implements ILuaAPI {
         if (anyLastPlayer || !anyNamed) requireAuth();
     }
 
-    /** A named player must be at this table: online, approved here, and touching it within the staleness window. */
-    private UUID resolveNamedPlayer(String target) throws LuaException {
+    private ServerPlayer approvedPlayer(String target) throws LuaException {
         String name = target.substring(NAMED_PLAYER_PREFIX.length());
-        var server = ServerLifecycleHooks.getCurrentServer();
-        ServerPlayer player = server == null ? null : server.getPlayerList().getPlayerByName(name);
+        ServerPlayer player = onlinePlayer(name);
         if (player == null) {
             throw new LuaException("player '" + name + "' is not online");
         }
         if (!SessionAuthManager.isAuthenticated(player.getUUID(), computerId)) {
             throw new LuaException("player '" + name + "' has not approved this computer");
         }
+        return player;
+    }
+
+    private static ServerPlayer onlinePlayer(String name) {
+        var server = ServerLifecycleHooks.getCurrentServer();
+        return server == null ? null : server.getPlayerList().getPlayerByName(name);
+    }
+
+    /** The host paying a player costs that player nothing, so they only have to have approved this computer: a winner who stepped away still gets paid. */
+    private UUID resolveNamedPayee(String target) throws LuaException {
+        return approvedPlayer(target).getUUID();
+    }
+
+    /** The named player, if they are online and their allowance here covers amount, which it now holds for this charge. */
+    private UUID reserveAllowance(String target, long amount) {
+        ServerPlayer player = onlinePlayer(target.substring(NAMED_PLAYER_PREFIX.length()));
+        if (player == null) return null;
+        return AllowanceManager.reserve(computerId, player.getUUID(), amount, System.currentTimeMillis()) ? player.getUUID() : null;
+    }
+
+    /** A named player must be at this table: online, approved here, and touching it within the staleness window. */
+    private UUID resolveNamedPlayer(String target) throws LuaException {
+        String name = target.substring(NAMED_PLAYER_PREFIX.length());
+        ServerPlayer player = approvedPlayer(target);
         if (!ComputerInteractionTracker.isFresh(computerId, player.getUUID())) {
             throw new LuaException("player '" + name + "' has not touched this computer recently");
         }

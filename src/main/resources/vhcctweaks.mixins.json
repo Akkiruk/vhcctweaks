@@ -8,7 +8,15 @@
     "ChatBoxPeripheralMixin",
     "RecipeResolverMixin",
     "ServerComputerLockdownMixin",
-    "TileMonitorAccessor"
+    "TileMonitorAccessor",
+    "ServerComputerIndexMixin",
+    "PeripheralAPIMixin",
+    "PeripheralWrapperMixin",
+    "WiredRemoteWrapperMixin",
+    "WiredModemElementMixin",
+    "ModemHubMixin",
+    "WirelessModemHubTypeMixin",
+    "BlockEntityWatchMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -12,6 +12,10 @@ import com.vhcctweaks.handler.ComputerInteractionTracker;
 import com.vhcctweaks.handler.ComputerLock;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
 import com.vhcctweaks.handler.VaultProtectionHandler;
+import com.vhcctweaks.inventory.InventoryExtras;
+import com.vhcctweaks.inventory.InventoryWatch;
+import com.vhcctweaks.link.ComputerIndex;
+import com.vhcctweaks.link.LinkManager;
 import com.vhcctweaks.patcher.VaultConfigPatcher;
 import com.vhcctweaks.remote.RemoteControl;
 import com.vhcctweaks.detail.VaultItemDetailProvider;
@@ -53,6 +57,10 @@ public class VHCCTweaks {
         MinecraftForge.EVENT_BUS.register(SessionAuthManager.class);
         // Command registration and server start events
         MinecraftForge.EVENT_BUS.register(VHCCTweaks.class);
+        // Linked ender modems: load, unload and peripheral changes of linked computers
+        MinecraftForge.EVENT_BUS.register(LinkManager.class);
+        // inventory_changed: one event per watched inventory per computer per tick
+        MinecraftForge.EVENT_BUS.register(InventoryWatch.class);
 
         // Patch VH config files early (adds blacklist entries and tunes Advanced Peripherals)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
@@ -66,6 +74,9 @@ public class VHCCTweaks {
 
         // Vault item detail provider — enriches getItemDetail() with VH item data
         DetailRegistries.ITEM_STACK.addProvider(new VaultItemDetailProvider());
+
+        // listDetailed, moveMany, watch and unwatch on every inventory peripheral
+        ComputerCraftAPI.registerGenericSource(new InventoryExtras());
     }
 
     @SubscribeEvent
@@ -83,6 +94,9 @@ public class VHCCTweaks {
         VHCCTweaksAPI.setRootDir(dataDir);
         SessionAuthManager.reset();
         ComputerInteractionTracker.reset();
+        ComputerIndex.reset();
+        LinkManager.reset();
+        InventoryWatch.reset();
         ComputerPlacementTracker.init(dataDir);
         ComputerLock.init(dataDir);
         TransactionLedger.init(dataDir);

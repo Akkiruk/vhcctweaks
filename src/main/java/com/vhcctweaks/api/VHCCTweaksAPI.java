@@ -1,6 +1,7 @@
 package com.vhcctweaks.api;
 
 import com.vhcctweaks.config.ModConfig;
+import com.vhcctweaks.inventory.InventoryWatch;
 import com.vhcctweaks.remote.RemoteControl;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
@@ -52,6 +53,12 @@ public class VHCCTweaksAPI implements ILuaAPI {
     @Override
     public String[] getNames() {
         return new String[]{"vhcc"};
+    }
+
+    /** A reboot or shutdown ends every inventory watch this computer made. */
+    @Override
+    public void shutdown() {
+        InventoryWatch.clearComputer(computerId);
     }
 
     /**

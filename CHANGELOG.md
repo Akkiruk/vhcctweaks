@@ -4,7 +4,29 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+Bigger one. Computers can finally reach each other's stuff without running cable across the map.
+
+### Linked ender modems
+
+- Ender modems have `link(id)`, `unlink(id)` and `getLinks()`. Link to another computer you own in the same dimension, and its peripherals show up as `<id>:<name>`, like `5:left` or `5:minecraft:chest_3`. Any distance.
+- Both computers need an ender modem. A plain wireless modem can't link and doesn't get these methods.
+- It works like a wired modem: `peripheral.getNames()`, `peripheral.wrap()` and `pushItems`/`pullItems` all see linked peripherals, local to remote or remote to remote. Ender modems now also report the `peripheral_hub` type.
+- A touch on a linked monitor sends `monitor_touch` with the linked name, and counts as a touch on both computers.
+- If the other computer unloads, its peripherals detach and calls fail with "computer 5 is not loaded". They come back when it loads. Nothing gets chunk loaded.
+- Links aren't saved. Set them again on boot. The limit is `links.maxLinksPerComputer` (64).
+
+### Inventories
+
+- `listDetailed()` gets `getItemDetail` for every slot in one go.
+- `moveMany(moves)` does a whole list of `pushItems` in one call, up to `inventory.maxBatchMoves` (256). It stops early once it has used `inventory.batchTimeBudgetMicros` of server time and tells you how many it got through, so call it again with the rest.
+- `watch()` and `unwatch()` send `inventory_changed` when a chest's contents change, from a player, a hopper or a computer. One event per tick at most.
+
+### CCVault
+
+- `ccvault.requestAllowance(player, maxTokens, minutes)` asks a player once in chat. If they approve, this computer can charge them up to that much with no fresh touch until it runs out, runs out of time, they leave, or they `/ccvault revoke`. The answer comes back as `ccvault_allowance`. There's also `getAllowance` and `endAllowance`.
+- `/ccvault revoke` with no number revokes everything you've approved.
+- The host paying a player with `transfer("host", "player:Name", ...)` no longer needs that player to have touched the computer recently, so a winner who walked off still gets paid. Charging a player still needs the touch.
+- `interactionStaleSeconds` can go up to an hour now (was 5 minutes).
 
 ## [2.2.35] - 2026-10-31
 

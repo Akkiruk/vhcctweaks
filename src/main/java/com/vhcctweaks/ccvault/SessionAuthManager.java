@@ -176,7 +176,7 @@ public class SessionAuthManager {
         cleanupPendingNonces(now);
         if (hasPending(player.getUUID(), computerId, Request.ALLOWANCE, now)) return -1;
 
-        AllowanceAsk ask = new AllowanceAsk(AllowanceManager.nextRequestId(), player.getGameProfile().getName(), maxTokens, minutes);
+        AllowanceAsk ask = new AllowanceAsk(AllowanceManager.nextRequestId(computerId),player.getGameProfile().getName(), maxTokens, minutes);
         String text = computerName + " (owner " + ownerName + ") asks to charge you up to " + maxTokens
                 + " tokens over " + minutes + " minutes ";
         sendPrompt(player, computerId, Request.ALLOWANCE, ask, text, "[APPROVE]",

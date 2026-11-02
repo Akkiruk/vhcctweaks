@@ -37,21 +37,28 @@ public final class AllowanceManager {
     }
 
     private static final Map<Key, Allowance> ALLOWANCES = new ConcurrentHashMap<>();
-    private static final AtomicInteger NEXT_REQUEST = new AtomicInteger(1);
+    /** Request ids count 1, 2, ... on each computer, from its boot. */
+    private static final Map<Integer, AtomicInteger> NEXT_REQUEST = new ConcurrentHashMap<>();
     private static volatile EventSink sink = AllowanceManager::queueOnComputer;
 
     private AllowanceManager() {}
 
     public static void reset() {
         ALLOWANCES.clear();
+        NEXT_REQUEST.clear();
     }
 
     static void setSink(EventSink newSink) {
         sink = newSink;
     }
 
-    static int nextRequestId() {
-        return NEXT_REQUEST.getAndIncrement();
+    static int nextRequestId(int computerId) {
+        return NEXT_REQUEST.computeIfAbsent(computerId, id -> new AtomicInteger(1)).getAndIncrement();
+    }
+
+    /** A computer booted: its request ids start again at 1. */
+    public static void restartIds(int computerId) {
+        NEXT_REQUEST.remove(computerId);
     }
 
     /** An approved request replaces any allowance the player already gave this computer. */
@@ -96,7 +103,7 @@ public final class AllowanceManager {
                 ALLOWANCES.remove(key, allowance);
                 return null;
             }
-            return new long[]{allowance.remaining, (allowance.expiresAt - now + 999) / 1000};
+            return new long[]{allowance.remaining, (allowance.expiresAt - now) / 1000};
         }
     }
 

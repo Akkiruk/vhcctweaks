@@ -176,6 +176,22 @@ class AllowanceTest {
     }
 
     @Test
+    void requestIdsCountFromOnePerComputerAndRestartOnBoot() {
+        assertEquals(1, AllowanceManager.nextRequestId(COMPUTER));
+        assertEquals(2, AllowanceManager.nextRequestId(COMPUTER));
+        assertEquals(1, AllowanceManager.nextRequestId(COMPUTER + 1));
+        AllowanceManager.restartIds(COMPUTER);
+        assertEquals(1, AllowanceManager.nextRequestId(COMPUTER));
+    }
+
+    @Test
+    void secondsLeftRoundDown() {
+        long now = System.currentTimeMillis();
+        AllowanceManager.grant(COMPUTER, steve, 10, now + 1_999);
+        assertEquals(1, AllowanceManager.get(COMPUTER, steve, now)[1]);
+    }
+
+    @Test
     void aNewApprovalReplacesTheOldAllowance() {
         long now = System.currentTimeMillis();
         AllowanceManager.grant(COMPUTER, steve, 100, now + 60_000);

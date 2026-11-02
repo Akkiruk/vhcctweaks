@@ -76,6 +76,7 @@ public class CCVaultAPI implements ILuaAPI {
     @Override
     public void startup() {
         RemoteControl.clearControlled(computerId);
+        AllowanceManager.restartIds(computerId);
     }
 
     /** Allowance requests still waiting die with the program that asked; allowances already granted stay. */

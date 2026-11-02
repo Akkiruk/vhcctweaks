@@ -177,6 +177,22 @@ public class CCVaultAPI implements ILuaAPI {
         return new Object[]{balance};
     }
 
+    /**
+     * A player's Vault Hunters level, online or offline, resolved like getPlayerBalance. Read-only, no auth.
+     * Returns the level, or nil and "unknown player" or "no vault data".
+     *
+     * Lua: local level, err = ccvault.getPlayerVaultLevel("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerVaultLevel(String playerName) {
+        if (playerName == null || playerName.isBlank()) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
+        String name = playerName.trim();
+        PlayerLookup.Result lookup = resolvePlayer(name);
+        var server = ServerLifecycleHooks.getCurrentServer();
+        Integer level = lookup.status() == PlayerLookup.Status.FOUND && server != null ? VaultLevels.read(server, lookup.uuid()) : null;
+        return VaultLevelReply.answer(lookup.status(), name, level);
+    }
+
     // ===== Transfer =====
 
     /**

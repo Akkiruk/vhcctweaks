@@ -164,6 +164,18 @@ class AllowanceTest {
     }
 
     @Test
+    void aRebootDropsWaitingRequestsQuietlyButKeepsAllowances() {
+        long now = System.currentTimeMillis();
+        AllowanceManager.grant(COMPUTER, steve, 100, now + 60_000);
+        String nonce = ask(alex, "Alex", 7, 50, 5, now + 60_000);
+
+        SessionAuthManager.dropPendingAllowances(COMPUTER);
+        assertEquals(Approval.INVALID, SessionAuthManager.approveNonce(alex, nonce));
+        assertTrue(events.isEmpty());
+        assertEquals(100, AllowanceManager.get(COMPUTER, steve, now)[0]);
+    }
+
+    @Test
     void aNewApprovalReplacesTheOldAllowance() {
         long now = System.currentTimeMillis();
         AllowanceManager.grant(COMPUTER, steve, 100, now + 60_000);

@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Linked ender modems. A computer calls link(id) on its ender modem and gets that computer's peripherals as
@@ -51,6 +52,8 @@ public final class LinkManager {
         final IComputerAccess host;
         final int hostId;
         final Map<Integer, Link> links = new ConcurrentHashMap<>();
+        /** Link order, for getLinks and getNamesRemote. Changed only under the hub lock. */
+        final List<Integer> order = new CopyOnWriteArrayList<>();
         boolean closed;
 
         Hub(IComputerAccess host, int hostId) {
@@ -110,6 +113,7 @@ public final class LinkManager {
             if (hub.links.containsKey(targetId)) return new Object[]{true};
             Link link = new Link(hub, targetId);
             hub.links.put(targetId, link);
+            hub.order.add(targetId);
             LINKS_BY_TARGET.computeIfAbsent(targetId, id -> ConcurrentHashMap.newKeySet()).add(link);
             activate(link, target);
         }
@@ -122,6 +126,7 @@ public final class LinkManager {
         synchronized (hub) {
             Link link = hub.links.remove(targetId);
             if (link == null) return false;
+            hub.order.remove((Integer) targetId);
             forget(link);
         }
         return true;
@@ -130,21 +135,24 @@ public final class LinkManager {
     static List<Integer> getLinks(IComputerAccess host) {
         Hub hub = HUBS.get(host);
         if (hub == null) return Collections.emptyList();
-        List<Integer> ids = new ArrayList<>(hub.links.keySet());
-        Collections.sort(ids);
-        return ids;
+        return new ArrayList<>(hub.order);
     }
 
     // ===== Lua: the peripheral hub methods, like a wired modem's =====
 
+    /** Linked computers in link order, each one's peripherals sorted by name. */
     static List<String> getNamesRemote(IComputerAccess host) {
         Hub hub = HUBS.get(host);
         if (hub == null) return Collections.emptyList();
         List<String> names = new ArrayList<>();
-        for (Link link : hub.links.values()) {
-            for (LinkedPeripheral peripheral : link.attached.values()) names.add(peripheral.name);
+        for (Integer id : hub.order) {
+            Link link = hub.links.get(id);
+            if (link == null) continue;
+            List<String> mine = new ArrayList<>();
+            for (LinkedPeripheral peripheral : link.attached.values()) mine.add(peripheral.name);
+            Collections.sort(mine);
+            names.addAll(mine);
         }
-        Collections.sort(names);
         return names;
     }
 
@@ -275,6 +283,7 @@ public final class LinkManager {
         }
         synchronized (hub) {
             hub.closed = true;
+            hub.order.clear();
             for (Iterator<Link> it = hub.links.values().iterator(); it.hasNext(); ) {
                 Link link = it.next();
                 it.remove();

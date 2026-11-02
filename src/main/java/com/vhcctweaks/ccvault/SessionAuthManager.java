@@ -215,9 +215,12 @@ public class SessionAuthManager {
         long expiryMs = ModConfig.CCVAULT_NONCE_EXPIRY_SECONDS.get() * 1000L;
         String nonce = addPending(player.getUUID(), computerId, System.currentTimeMillis() + expiryMs, request, ask);
 
-        MutableComponent msg = new TextComponent("")
-                .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                .append(new TextComponent(text).withStyle(ChatFormatting.YELLOW))
+        // The allowance prompt is exactly the sentence in the 2.2.36 spec, with no [CCVault] tag in front
+        MutableComponent msg = new TextComponent("");
+        if (request != Request.ALLOWANCE) {
+            msg.append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+        }
+        msg.append(new TextComponent(text).withStyle(ChatFormatting.YELLOW))
                 .append(new TextComponent(button)
                         .withStyle(style -> style
                                 .withColor(ChatFormatting.GREEN)
@@ -275,6 +278,11 @@ public class SessionAuthManager {
         Map<UUID, AuthSession> sessions = computerSessions.get(computerId);
         if (sessions != null) sessions.remove(playerUuid);
         AllowanceManager.end(computerId, playerUuid);
+    }
+
+    /** A computer rebooted: its waiting allowance requests are dropped, with no event. Granted allowances stay. */
+    public static void dropPendingAllowances(int computerId) {
+        pendingNonces.values().removeIf(p -> p.request() == Request.ALLOWANCE && p.computerId() == computerId);
     }
 
     /** /ccvault revoke with no computer: every session and allowance this player has given. */

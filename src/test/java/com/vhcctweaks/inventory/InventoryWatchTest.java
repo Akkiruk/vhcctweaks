@@ -157,7 +157,7 @@ class InventoryWatchTest {
         InventoryWatch.watch(chest, new FakeAccess(1, "left"), 1, 1, isGone);
         LuaException e = assertThrows(LuaException.class,
                 () -> InventoryWatch.watch(barrel, new FakeAccess(1, "right"), 1, 1, isGone));
-        assertEquals("too many watched inventories (max 1)", e.getMessage());
+        assertEquals("too many watches (max 1)", e.getMessage());
         InventoryWatch.watch(barrel, new FakeAccess(2, "right"), 2, 1, isGone);
     }
 

@@ -53,8 +53,8 @@ public final class InventoryExtras implements GenericSource {
     }
 
     /**
-     * Many pushItems in one main-thread call: { { fromSlot, to, toSlot?, limit? }, ... }.
-     * Every move is checked before any item moves, so a bad target or slot raises pushItems' error and moves nothing.
+     * Many pushItems in one main-thread call: { { fromSlot, to, toSlot?, limit? }, ... }, run in order.
+     * A move that raises (a bad target or slot) ends the batch with pushItems' own error; moves before it stay done.
      * Stops early once the batch has used batchTimeBudgetMicros; done says how many moves were attempted.
      */
     @LuaFunction(mainThread = true)
@@ -62,26 +62,21 @@ public final class InventoryExtras implements GenericSource {
         long start = System.nanoTime();
         List<MoveBatch.Move> batch = MoveBatch.parse(moves, ModConfig.INVENTORY_MAX_BATCH_MOVES.get());
 
-        IItemHandler[] targets = new IItemHandler[batch.size()];
+        // Each name is looked up once per batch, the first time a move uses it
         Map<String, IItemHandler> byName = new HashMap<>();
-        for (int i = 0; i < batch.size(); i++) {
+        long budget = ModConfig.INVENTORY_BATCH_TIME_BUDGET_MICROS.get() * 1000L;
+        return MoveBatch.run(batch.size(), start, budget, System::nanoTime, i -> {
             MoveBatch.Move move = batch.get(i);
             IItemHandler to = byName.get(move.to());
             if (to == null) {
                 to = resolveTarget(computer, move.to());
                 byName.put(move.to(), to);
             }
+            int limit = move.limit() == null ? Integer.MAX_VALUE : move.limit();
             assertBetween(move.fromSlot(), 1, from.getSlots(), "From slot out of range (%s)");
             if (move.toSlot() != null) assertBetween(move.toSlot(), 1, to.getSlots(), "To slot out of range (%s)");
-            targets[i] = to;
-        }
-
-        long budget = ModConfig.INVENTORY_BATCH_TIME_BUDGET_MICROS.get() * 1000L;
-        return MoveBatch.run(batch.size(), start, budget, System::nanoTime, i -> {
-            MoveBatch.Move move = batch.get(i);
-            int limit = move.limit() == null ? Integer.MAX_VALUE : move.limit();
             if (limit <= 0) return 0;
-            return moveItem(from, move.fromSlot() - 1, targets[i], move.toSlot() == null ? -1 : move.toSlot() - 1, limit);
+            return moveItem(from, move.fromSlot() - 1, to, move.toSlot() == null ? -1 : move.toSlot() - 1, limit);
         }).toLua();
     }
 

@@ -78,7 +78,7 @@ public final class InventoryWatch {
             }
             mine = BY_COMPUTER.get(computerId);
         }
-        if (mine != null && mine.size() >= max) throw new LuaException("too many watched inventories (max " + max + ")");
+        if (mine != null && mine.size() >= max) throw new LuaException("too many watches (max " + max + ")");
 
         Watch watch = new Watch(block, access, computerId);
         BY_BLOCK.computeIfAbsent(block, b -> new CopyOnWriteArrayList<>()).add(watch);

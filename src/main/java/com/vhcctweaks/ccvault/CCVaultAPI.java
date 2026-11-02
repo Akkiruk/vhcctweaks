@@ -78,6 +78,12 @@ public class CCVaultAPI implements ILuaAPI {
         RemoteControl.clearControlled(computerId);
     }
 
+    /** Allowance requests still waiting die with the program that asked; allowances already granted stay. */
+    @Override
+    public void shutdown() {
+        SessionAuthManager.dropPendingAllowances(computerId);
+    }
+
     // ===== Availability =====
 
     /**
@@ -257,20 +263,20 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local id = ccvault.requestAllowance("Steve", 500, 60)
      */
     @LuaFunction(mainThread = true)
-    public final Object[] requestAllowance(String playerName, long maxTokens, int minutes) throws LuaException {
-        if (playerName == null || playerName.isBlank()) throw new LuaException("player is required");
-        if (maxTokens <= 0) throw new LuaException("maxTokens must be positive");
+    public final Object[] requestAllowance(String playerName, long maxTokens, int minutes) {
+        if (playerName == null || playerName.isBlank()) return new Object[]{null, "player is required"};
+        if (maxTokens <= 0) return new Object[]{null, "maxTokens must be positive"};
         int maxMinutes = ModConfig.CCVAULT_MAX_ALLOWANCE_MINUTES.get();
-        if (minutes < 1 || minutes > maxMinutes) throw new LuaException("minutes must be between 1 and " + maxMinutes);
+        if (minutes < 1 || minutes > maxMinutes) return new Object[]{null, "minutes must be between 1 and " + maxMinutes};
 
         ServerPlayer player = onlinePlayer(playerName.trim());
-        if (player == null) throw new LuaException("player '" + playerName.trim() + "' is not online");
+        if (player == null) return new Object[]{null, "player '" + playerName.trim() + "' is not online"};
         UUID owner = ComputerPlacementTracker.getOwner(computerId);
-        if (owner == null) throw new LuaException(OWNER_REGISTRATION_MESSAGE);
+        if (owner == null) return new Object[]{null, OWNER_REGISTRATION_MESSAGE};
 
         int requestId = SessionAuthManager.requestAllowance(player, computerId, computerName(), nameOf(owner), maxTokens, minutes);
         if (requestId < 0) {
-            throw new LuaException("an allowance request to '" + player.getGameProfile().getName() + "' is already waiting");
+            return new Object[]{null, "an allowance request to '" + player.getGameProfile().getName() + "' is already waiting"};
         }
         return new Object[]{requestId};
     }

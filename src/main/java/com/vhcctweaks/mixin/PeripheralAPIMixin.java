@@ -28,7 +28,8 @@ public abstract class PeripheralAPIMixin {
 
     @Shadow @Final private IAPIEnvironment environment;
 
-    @Inject(method = "getMethods", at = @At("RETURN"))
+    // PeripheralAPI also has the Lua function getMethods(String), so name the static one by its descriptor
+    @Inject(method = "getMethods(Ldan200/computercraft/api/peripheral/IPeripheral;)Ljava/util/Map;", at = @At("RETURN"))
     private static void vhcctweaks_addHubMethods(IPeripheral peripheral, CallbackInfoReturnable<Map<String, PeripheralMethod>> cir) {
         if (peripheral instanceof WirelessModemPeripheral modem && modem.isInterdimensional()) {
             HubMethods.addTo(cir.getReturnValue());

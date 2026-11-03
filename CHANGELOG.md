@@ -4,6 +4,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [2.2.36] - 2026-11-03
+
 Bigger one. Computers can finally reach each other's stuff without running cable across the map.
 
 ### Linked ender modems

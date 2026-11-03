@@ -76,10 +76,10 @@ public final class RemoteControl {
 
     // ---- computers ----
 
+    /** A loaded computer with this ID, one that is on if any is. Looked up by ID, not by walking every computer. */
     public static ServerComputer find(MinecraftServer server, int id) {
         ServerComputer found = null;
-        for (ServerComputer computer : ServerContext.get(server).registry().getComputers()) {
-            if (computer.getID() != id) continue;
+        for (ServerComputer computer : com.vhcctweaks.link.ComputerIndex.all(id)) {
             if (computer.isOn()) return computer;
             found = computer;
         }
@@ -182,8 +182,26 @@ public final class RemoteControl {
         return true;
     }
 
+    /** The client refuses chat JSON over 262,144 characters by disconnecting, so replies stay under this. */
+    static final int MAX_CHAT_JSON_CHARS = 260_000;
+
     public static void send(ServerPlayer player, JsonObject reply) {
-        player.sendMessage(new TextComponent(REPLY_PREFIX + reply).withStyle(ChatFormatting.DARK_GRAY), Util.NIL_UUID);
+        net.minecraft.network.chat.MutableComponent line = new TextComponent(REPLY_PREFIX + reply).withStyle(ChatFormatting.DARK_GRAY);
+        // Escaping can make a 64K reply several times longer on the wire: send a small error the tool can read instead
+        if (net.minecraft.network.chat.Component.Serializer.toJson(line).length() > MAX_CHAT_JSON_CHARS) {
+            line = new TextComponent(REPLY_PREFIX + tooLarge(reply)).withStyle(ChatFormatting.DARK_GRAY);
+        }
+        player.sendMessage(line, Util.NIL_UUID);
+    }
+
+    /** The reply's seq and exec, ok false, and why. */
+    static JsonObject tooLarge(JsonObject reply) {
+        JsonObject small = new JsonObject();
+        if (reply.has("seq")) small.add("seq", reply.get("seq"));
+        if (reply.has("exec")) small.add("exec", reply.get("exec"));
+        small.addProperty("ok", false);
+        small.addProperty("error", "reply too large for one chat line");
+        return small;
     }
 
     private record PendingExec(UUID player, int computerId, long startedAt) {}

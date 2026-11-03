@@ -56,6 +56,12 @@ public class VHCCTweaksAPI implements ILuaAPI {
         return new String[]{"vhcc"};
     }
 
+    /** Each boot reads the computer's vhcc_lockdown.txt again, so changes to it apply after a reboot. */
+    @Override
+    public void startup() {
+        com.vhcctweaks.lockdown.LockdownWritableMount.reload(computerId);
+    }
+
     /** A reboot or shutdown ends every inventory watch this computer made. */
     @Override
     public void shutdown() {

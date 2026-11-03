@@ -276,8 +276,12 @@ public class VaultConfigPatcher {
         return result.toString();
     }
 
+    /** Compiled once per key, not once per line. */
+    private static final java.util.Map<String, Pattern> MONITOR_SETTING = new java.util.concurrent.ConcurrentHashMap<>();
+
     private static String patchMonitorSetting(String line, String key, int value) {
-        Pattern pattern = Pattern.compile("^(\\s*)" + Pattern.quote(key) + "\\s*=\\s*\\d+(\\s*(?:#.*)?)$");
+        Pattern pattern = MONITOR_SETTING.computeIfAbsent(key,
+                k -> Pattern.compile("^(\\s*)" + Pattern.quote(k) + "\\s*=\\s*\\d+(\\s*(?:#.*)?)$"));
         Matcher matcher = pattern.matcher(line);
         if (!matcher.matches()) return line;
         return matcher.group(1) + key + " = " + value + matcher.group(2);

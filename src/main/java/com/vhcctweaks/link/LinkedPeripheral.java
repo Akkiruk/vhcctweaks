@@ -1,6 +1,7 @@
 package com.vhcctweaks.link;
 
 import com.vhcctweaks.VHCCTweaks;
+import com.vhcctweaks.remote.EventPacer;
 import dan200.computercraft.api.filesystem.IMount;
 import dan200.computercraft.api.filesystem.IWritableMount;
 import dan200.computercraft.api.lua.IArguments;
@@ -64,11 +65,8 @@ final class LinkedPeripheral implements IComputerAccess {
         } catch (RuntimeException e) {
             VHCCTweaks.LOGGER.warn("Linked peripheral {} failed to attach", name, e);
         }
-        try {
-            host().queueEvent("peripheral", name);
-        } catch (NotAttachedException ignored) {
-            // The linking computer's modem is going away: its own detach follows
-        }
+        // Paced: a target with hundreds of peripherals must not overflow the linking computer's event queue
+        EventPacer.linkEvent(host(), "peripheral", name);
     }
 
     void detach() {
@@ -77,11 +75,7 @@ final class LinkedPeripheral implements IComputerAccess {
         } catch (RuntimeException e) {
             VHCCTweaks.LOGGER.warn("Linked peripheral {} failed to detach", name, e);
         }
-        try {
-            host().queueEvent("peripheral_detach", name);
-        } catch (NotAttachedException ignored) {
-            // The linking computer is shutting down and will not see it
-        }
+        EventPacer.linkEvent(host(), "peripheral_detach", name);
         attached = false;
 
         synchronized (this) {

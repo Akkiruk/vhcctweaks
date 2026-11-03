@@ -63,6 +63,8 @@ public class VHCCTweaks {
         MinecraftForge.EVENT_BUS.register(InventoryWatch.class);
         // Who is on this server, kept for lookups from computer threads
         MinecraftForge.EVENT_BUS.register(com.vhcctweaks.util.Safety.class);
+        // The mod's own bursts of events, spread over ticks so CC's 256-event queue never overflows
+        MinecraftForge.EVENT_BUS.register(com.vhcctweaks.remote.EventPacer.class);
 
         // Patch VH config files early (adds blacklist entries and tunes Advanced Peripherals)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
@@ -98,6 +100,7 @@ public class VHCCTweaks {
         ComputerInteractionTracker.reset();
         ComputerIndex.reset();
         com.vhcctweaks.util.Safety.resetPlayers();
+        com.vhcctweaks.remote.EventPacer.reset();
         LinkManager.reset();
         InventoryWatch.reset();
         ComputerPlacementTracker.init(dataDir);

@@ -67,9 +67,9 @@ public class RemoteCommand {
         seq.then(action("ping", RemoteCommand::ping));
         seq.then(action("list", RemoteCommand::list));
         seq.then(Commands.literal("serverlog").then(Commands.argument("lines", IntegerArgumentType.integer(1, 300))
-                .executes(guarded("serverlog", RemoteCommand::serverLog))));
+                .executes(guardedAsync("serverlog", RemoteCommand::serverLog))));
         seq.then(Commands.literal("ledger").then(Commands.argument("player", StringArgumentType.word())
-                .then(Commands.argument("limit", IntegerArgumentType.integer(1, 500)).executes(guarded("ledger", RemoteCommand::ledger)))));
+                .then(Commands.argument("limit", IntegerArgumentType.integer(1, 500)).executes(guardedAsync("ledger", RemoteCommand::ledger)))));
         seq.then(Commands.literal("clear").executes(guarded("clear", RemoteCommand::clearBuffer)));
         seq.then(Commands.literal("buf").then(Commands.argument("data", StringArgumentType.word())
                 .executes(guarded("buf", RemoteCommand::appendBuffer))));
@@ -134,6 +134,45 @@ public class RemoteCommand {
             }
             RemoteControl.send(player, reply);
             return reply.get("ok").getAsBoolean() ? 1 : 0;
+        };
+    }
+
+    /** One thread for slow reads, which also keeps a player repeating them from piling up work. */
+    private static final java.util.concurrent.ExecutorService RC_IO = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "VHCC-RemoteIO");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /**
+     * Like guarded, for actions that read big files (the server log, a ledger): they run off the server thread and the
+     * same reply goes out when they finish, matched by seq as always. The command itself returns 1 once accepted.
+     */
+    private static com.mojang.brigadier.Command<CommandSourceStack> guardedAsync(String name, Action action) {
+        return ctx -> {
+            ServerPlayer player = ctx.getSource().getPlayerOrException();
+            MinecraftServer server = ctx.getSource().getServer();
+            JsonObject reply = new JsonObject();
+            reply.addProperty("seq", IntegerArgumentType.getInteger(ctx, "seq"));
+            try {
+                RemoteControl.audit(player, name, describe(ctx));
+            } catch (IOException e) {
+                reply.addProperty("ok", false);
+                reply.addProperty("error", String.valueOf(e.getMessage()));
+                RemoteControl.send(player, reply);
+                return 0;
+            }
+            RC_IO.execute(() -> {
+                try {
+                    action.run(ctx, player, reply);
+                    reply.addProperty("ok", true);
+                } catch (Exception | LinkageError e) {
+                    reply.addProperty("ok", false);
+                    reply.addProperty("error", String.valueOf(e.getMessage()));
+                }
+                server.execute(() -> RemoteControl.send(player, reply));
+            });
+            return 1;
         };
     }
 
@@ -247,10 +286,9 @@ public class RemoteCommand {
     // ---- input ----
 
     private static void type(CommandContext<CommandSourceStack> ctx, ServerPlayer player, JsonObject reply) throws IOException {
-        ServerComputer computer = controlled(ctx, player);
-        for (char c : StringArgumentType.getString(ctx, "text").toCharArray()) {
-            computer.queueEvent("char", new Object[]{String.valueOf(c)});
-        }
+        // A char event per character, 32 per tick: CC's queue holds 256 events and drops the rest, which could lose
+        // the computer's own task_complete and hang a main-thread call
+        com.vhcctweaks.remote.EventPacer.typeText(controlled(ctx, player), StringArgumentType.getString(ctx, "text"));
     }
 
     private static void key(CommandContext<CommandSourceStack> ctx, ServerPlayer player, JsonObject reply) throws IOException {
@@ -315,12 +353,17 @@ public class RemoteCommand {
     private static void readFile(CommandContext<CommandSourceStack> ctx, ServerPlayer player, JsonObject reply) throws IOException {
         Path file = path(ctx);
         if (!Files.isRegularFile(file)) throw new IOException("no such file");
-        byte[] all = Files.readAllBytes(file);
-        int offset = Math.min(IntegerArgumentType.getInteger(ctx, "offset"), all.length);
-        int length = Math.min(READ_PAGE_BYTES, all.length - offset);
-        reply.addProperty("size", all.length);
-        reply.addProperty("offset", offset);
-        reply.addProperty("data", Base64.getEncoder().encodeToString(java.util.Arrays.copyOfRange(all, offset, offset + length)));
+        // One page, read where it starts: reading the whole file for every page made a download cost its size squared
+        try (RandomAccessFile f = new RandomAccessFile(file.toFile(), "r")) {
+            long size = f.length();
+            int offset = (int) Math.min(IntegerArgumentType.getInteger(ctx, "offset"), size);
+            byte[] page = new byte[(int) Math.min(READ_PAGE_BYTES, size - offset)];
+            f.seek(offset);
+            f.readFully(page);
+            reply.addProperty("size", size);
+            reply.addProperty("offset", offset);
+            reply.addProperty("data", Base64.getEncoder().encodeToString(page));
+        }
     }
 
     private static void putFile(CommandContext<CommandSourceStack> ctx, ServerPlayer player, JsonObject reply) throws IOException {

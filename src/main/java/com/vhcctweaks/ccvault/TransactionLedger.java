@@ -25,18 +25,19 @@ public class TransactionLedger {
     private static final Gson GSON = new Gson();
     private static Path ledgerFile;
     private static Path participantHistoryDir;
+    /** Files whose last line has been checked for a crash's torn end in this run. */
+    private static final Set<Path> ENDED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public static void init(Path dataDir) {
         ledgerFile = dataDir.resolve("ccvault").resolve("ledger").resolve("transactions.jsonl");
         participantHistoryDir = ledgerFile.getParent().resolve("participants");
+        ENDED.clear();
         try {
             Files.createDirectories(participantHistoryDir);
             endLastLine(ledgerFile);
-            try (var files = Files.list(participantHistoryDir)) {
-                for (Path file : (Iterable<Path>) files::iterator) {
-                    endLastLine(file);
-                }
-            }
+            ENDED.add(ledgerFile);
+            // Participant files are checked for a torn last line the first time each is appended to in this run,
+            // not all at start-up: with players coming from across a network there can be thousands of them
             rebuildParticipantIndexesIfNeeded();
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to prepare ledger directory", e);
@@ -212,9 +213,16 @@ public class TransactionLedger {
         if (participantFile == null) return;
 
         try {
-            Files.createDirectories(participantFile.getParent());
-            Files.writeString(participantFile, line, StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            if (ENDED.add(participantFile)) endLastLine(participantFile);
+            try {
+                Files.writeString(participantFile, line, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (java.nio.file.NoSuchFileException e) {
+                // Folders are made only when missing: checking them on every append cost three file checks a transfer
+                Files.createDirectories(participantFile.getParent());
+                Files.writeString(participantFile, line, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            }
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to write participant ledger for {}", participantUuid, e);
         }
@@ -279,6 +287,9 @@ public class TransactionLedger {
             }
         }
 
+        // Grouped by participant and written in batches: one open per participant per batch, not per line
+        Map<UUID, StringBuilder> pending = new LinkedHashMap<>();
+        int buffered = 0;
         try (BufferedReader reader = Files.newBufferedReader(ledgerFile, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -286,10 +297,23 @@ public class TransactionLedger {
                 if (entry == null) continue;
 
                 for (UUID participant : entryParticipants(entry)) {
-                    appendParticipantLine(participant, line + "\n");
+                    pending.computeIfAbsent(participant, p -> new StringBuilder()).append(line).append('\n');
+                    buffered++;
+                }
+                if (buffered >= REBUILD_BATCH_LINES) {
+                    pending.forEach(TransactionLedger::appendParticipantLine);
+                    pending.clear();
+                    buffered = 0;
                 }
             }
         }
+        pending.forEach(TransactionLedger::appendParticipantLine);
+    }
+
+    private static final int REBUILD_BATCH_LINES = 10_000;
+
+    private static void appendParticipantLine(UUID participantUuid, StringBuilder lines) {
+        appendParticipantLine(participantUuid, lines.toString());
     }
 
     private static UUID uuidVal(Map<?, ?> map, String key) {

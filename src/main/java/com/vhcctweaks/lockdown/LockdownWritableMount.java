@@ -16,17 +16,38 @@ import java.util.OptionalLong;
  */
 public final class LockdownWritableMount implements IWritableMount {
     private final IWritableMount delegate;
-    private final LockdownManifest manifest;
+    private final int computerId;
+    /** Null while the computer has no manifest: then every write is allowed. */
+    private volatile LockdownManifest manifest;
 
-    private LockdownWritableMount(IWritableMount delegate, LockdownManifest manifest) {
+    /** Each computer's current root mount, so a reboot can read its manifest again. */
+    private static final java.util.Map<Integer, LockdownWritableMount> LIVE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private LockdownWritableMount(IWritableMount delegate, int computerId, LockdownManifest manifest) {
         this.delegate = delegate;
+        this.computerId = computerId;
         this.manifest = manifest;
     }
 
+    /**
+     * Every root mount is wrapped, manifest or not. CC keeps a computer's root mount for as long as the computer object
+     * lives, so the manifest is read again on each boot (reload), not only when the mount is made: adding, changing or
+     * removing vhcc_lockdown.txt takes effect on the next reboot.
+     */
     public static IWritableMount wrapIfNeeded(IWritableMount delegate, int computerId) {
-        LockdownManifest manifest = LockdownManifest.fromMount(delegate, computerId);
-        if (manifest == null) return delegate;
-        return new LockdownWritableMount(delegate, manifest);
+        LockdownWritableMount mount = new LockdownWritableMount(delegate, computerId, LockdownManifest.fromMount(delegate, computerId));
+        LIVE.put(computerId, mount);
+        return mount;
+    }
+
+    /** A computer is booting: read its manifest again. */
+    public static void reload(int computerId) {
+        LockdownWritableMount mount = LIVE.get(computerId);
+        if (mount != null) mount.manifest = LockdownManifest.fromMount(mount.delegate, computerId);
+    }
+
+    public static void reset() {
+        LIVE.clear();
     }
 
     @Override
@@ -94,11 +115,13 @@ public final class LockdownWritableMount implements IWritableMount {
     }
 
     private void assertWritable(String path) throws IOException {
-        if (isUnlocked() || manifest.allowsWrite(path)) return;
+        LockdownManifest current = manifest;
+        // The rule in memory first; the unlock file is a disk check, needed only for a write the rule refuses
+        if (current == null || current.allowsWrite(path) || isUnlocked(current)) return;
         throw new FileOperationException(path, "Access denied");
     }
 
-    private boolean isUnlocked() throws IOException {
-        return delegate.exists(manifest.unlockFile());
+    private boolean isUnlocked(LockdownManifest current) throws IOException {
+        return delegate.exists(current.unlockFile());
     }
 }

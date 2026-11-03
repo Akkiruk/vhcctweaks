@@ -68,16 +68,48 @@ public final class VaultLevels {
         }
     }
 
-    /** This server's saved profile, read without touching Vault Hunters' state. */
+    /** A file's level, remembered with the file's modified time and size so an unchanged file is not read again. */
+    private record Saved(long modified, long size, Integer level) {}
+
+    private static final Map<Path, Saved> SAVED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int SAVED_MAX = 4096;
+
+    /**
+     * This server's saved profile, read without touching Vault Hunters' state. The file is read in one go and parsed
+     * from memory: NbtIo.read(File) reads it a few bytes per system call, which cost milliseconds of server tick.
+     */
     static Integer readSaved(MinecraftServer server, UUID uuid) {
         Path file = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + PROFILE_SUFFIX);
-        if (!Files.isRegularFile(file)) return null;
+        java.nio.file.attribute.BasicFileAttributes attrs;
         try {
-            return levelIn(NbtIo.read(file.toFile()));
+            attrs = Files.readAttributes(file, java.nio.file.attribute.BasicFileAttributes.class);
+        } catch (IOException e) {
+            SAVED.remove(file);
+            return null;
+        }
+        if (!attrs.isRegularFile()) {
+            SAVED.remove(file);
+            return null;
+        }
+        long modified = attrs.lastModifiedTime().toMillis();
+        long size = attrs.size();
+        Saved hit = SAVED.get(file);
+        if (hit != null && hit.modified() == modified && hit.size() == size) return hit.level();
+        try {
+            byte[] bytes = Files.readAllBytes(file);
+            Integer level = levelIn(NbtIo.read(new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes)),
+                    net.minecraft.nbt.NbtAccounter.UNLIMITED));
+            if (SAVED.size() >= SAVED_MAX) SAVED.clear();
+            SAVED.put(file, new Saved(modified, size, level));
+            return level;
         } catch (IOException | RuntimeException e) {
             VHCCTweaks.LOGGER.warn("Could not read the saved vault level in {}", file, e);
             return null;
         }
+    }
+
+    static void resetSaved() {
+        SAVED.clear();
     }
 
     static Integer levelIn(CompoundTag profile) {

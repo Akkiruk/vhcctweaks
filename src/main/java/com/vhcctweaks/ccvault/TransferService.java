@@ -75,24 +75,24 @@ public class TransferService {
             return TransferResult.fail("transfer failed");
         }
 
-        TransactionLedger.logTransfer(txId, fromUuid, toUuid, amount, reason, computerId,
-                playerUuid, hostUuid);
+        com.vhcctweaks.util.Safety.guard("transfer ledger entry", () -> TransactionLedger.logTransfer(txId, fromUuid, toUuid,
+                amount, reason, computerId, playerUuid, hostUuid));
 
-        BalanceNotifier.notifyDebit(fromUuid, amount, reason);
-        BalanceNotifier.notifyCredit(toUuid, amount, reason);
+        // The money has moved: a notification going wrong must not turn this into a reported failure, or a caller
+        // would retry, and an allowance would be refunded for a charge that happened
+        com.vhcctweaks.util.Safety.guard("transfer debit notice", () -> BalanceNotifier.notifyDebit(fromUuid, amount, reason));
+        com.vhcctweaks.util.Safety.guard("transfer credit notice", () -> BalanceNotifier.notifyCredit(toUuid, amount, reason));
 
         return TransferResult.success(txId);
     }
+
+    private static final java.util.HexFormat HEX = java.util.HexFormat.of();
 
     private static String generateTxId() {
         // Timestamp prefix for sortability + secure random suffix for uniqueness
         byte[] randomBytes = new byte[6];
         SECURE_RANDOM.nextBytes(randomBytes);
-        StringBuilder hex = new StringBuilder(12);
-        for (byte b : randomBytes) {
-            hex.append(String.format("%02x", b & 0xFF));
-        }
-        return Long.toHexString(System.currentTimeMillis()) + "-" + hex;
+        return Long.toHexString(System.currentTimeMillis()) + "-" + HEX.formatHex(randomBytes);
     }
 
     public record TransferResult(boolean success, String txId, String error) {

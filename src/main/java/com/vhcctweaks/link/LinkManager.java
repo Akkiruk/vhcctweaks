@@ -116,7 +116,7 @@ public final class LinkManager {
             hub.links.put(targetId, link);
             hub.order.add(targetId);
             LINKS_BY_TARGET.computeIfAbsent(targetId, id -> ConcurrentHashMap.newKeySet()).add(link);
-            activate(link, target);
+            activate(link, viewOf(target));
         }
         return new Object[]{true};
     }
@@ -359,15 +359,19 @@ public final class LinkManager {
         Set<Link> links = LINKS_BY_TARGET.get(targetId);
         if (links == null) return;
         ServerComputer target = ComputerIndex.get(targetId);
+        // The target's peripherals are gathered once for all its links: same tick, same thread, same answer
+        Map<String, IPeripheral> view = null;
         for (Link link : links) {
             synchronized (link.hub) {
                 if (link.hub.closed || link.hub.links.get(targetId) != link) continue;
                 if (target == null) {
                     deactivate(link);
                 } else if (link.live && !checkRules) {
-                    refresh(link, target);
+                    if (view == null) view = viewOf(target);
+                    refresh(link, view);
                 } else if (rules(ComputerIndex.get(link.hub.hostId), target) == null) {
-                    if (link.live) refresh(link, target); else activate(link, target);
+                    if (view == null) view = viewOf(target);
+                    if (link.live) refresh(link, view); else activate(link, view);
                 } else {
                     deactivate(link);
                 }
@@ -397,10 +401,10 @@ public final class LinkManager {
         return count;
     }
 
-    private static void activate(Link link, ServerComputer target) {
+    private static void activate(Link link, Map<String, IPeripheral> view) {
         link.ghosts.clear();
         link.live = true;
-        refresh(link, target);
+        refresh(link, view);
     }
 
     private static void deactivate(Link link) {
@@ -429,8 +433,7 @@ public final class LinkManager {
         });
     }
 
-    private static void refresh(Link link, ServerComputer target) {
-        Map<String, IPeripheral> view = viewOf(target);
+    private static void refresh(Link link, Map<String, IPeripheral> view) {
         for (Iterator<Map.Entry<String, LinkedPeripheral>> it = link.attached.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<String, LinkedPeripheral> entry = it.next();
             IPeripheral now = view.get(entry.getKey());

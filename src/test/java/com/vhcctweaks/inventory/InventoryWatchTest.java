@@ -137,6 +137,49 @@ class InventoryWatchTest {
     }
 
     @Test
+    void oneComputerGetsAtMost32EventsATickAndTheRestNextTick() throws LuaException {
+        List<FakeAccess> accesses = new ArrayList<>();
+        List<Object> blocks = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            Object block = new Object();
+            FakeAccess access = new FakeAccess(1, "chest_" + i);
+            InventoryWatch.watch(block, access, 1, 64, isGone);
+            blocks.add(block);
+            accesses.add(access);
+        }
+        FakeAccess otherComputer = new FakeAccess(2, "1:chest_0");
+        InventoryWatch.watch(blocks.get(0), otherComputer, 2, 64, isGone);
+
+        for (Object block : blocks) InventoryWatch.onChanged(block);
+        assertEquals(33, InventoryWatch.flush(isGone));
+        assertEquals(1, otherComputer.events.size());
+        assertEquals(32, accesses.stream().mapToInt(a -> a.events.size()).sum());
+
+        // The other 8 next tick, one each
+        assertEquals(8, InventoryWatch.flush(isGone));
+        assertEquals(40, accesses.stream().mapToInt(a -> a.events.size()).sum());
+        assertTrue(accesses.stream().allMatch(a -> a.events.size() == 1));
+    }
+
+    @Test
+    void aDeferredWatchThatChangesAgainStillSendsOnce() throws LuaException {
+        List<Object> blocks = new ArrayList<>();
+        List<FakeAccess> accesses = new ArrayList<>();
+        for (int i = 0; i < 33; i++) {
+            Object block = new Object();
+            FakeAccess access = new FakeAccess(1, "chest_" + i);
+            InventoryWatch.watch(block, access, 1, 64, isGone);
+            blocks.add(block);
+            accesses.add(access);
+        }
+        for (Object block : blocks) InventoryWatch.onChanged(block);
+        assertEquals(32, InventoryWatch.flush(isGone));
+        InventoryWatch.onChanged(blocks.get(32));
+        assertEquals(1, InventoryWatch.flush(isGone));
+        assertEquals(1, accesses.get(32).events.size());
+    }
+
+    @Test
     void anotherBlocksChangeSendsNothing() throws LuaException {
         FakeAccess left = new FakeAccess(1, "left");
         InventoryWatch.watch(chest, left, 1, 64, isGone);

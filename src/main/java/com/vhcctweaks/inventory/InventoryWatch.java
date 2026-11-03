@@ -126,13 +126,29 @@ public final class InventoryWatch {
         }
     }
 
-    /** Sends one event per pending watch. Watches whose block or attachment has gone are dropped instead. */
+    /** At most this many inventory_changed events reach one computer in one tick; the rest wait for the next tick. */
+    public static final int EVENTS_PER_COMPUTER_PER_TICK = 32;
+
+    /**
+     * Sends one event per pending watch, at most EVENTS_PER_COMPUTER_PER_TICK per computer: CC drops events past 256,
+     * which could lose a task_complete. Watches past the limit stay pending, in order, for the next flush.
+     * Watches whose block or attachment has gone are dropped instead.
+     */
     public static int flush(Predicate<Object> blockGone) {
         int sent = 0;
+        Map<Integer, Integer> perComputer = new java.util.HashMap<>();
+        List<Watch> later = new ArrayList<>();
         Watch watch;
         while ((watch = PENDING.poll()) != null) {
+            if (watch.dead) {
+                watch.pending.set(false);
+                continue;
+            }
+            if (perComputer.merge(watch.computerId, 1, Integer::sum) > EVENTS_PER_COMPUTER_PER_TICK) {
+                later.add(watch);
+                continue;
+            }
             watch.pending.set(false);
-            if (watch.dead) continue;
             if (blockGone.test(watch.block)) {
                 drop(watch);
                 continue;
@@ -144,6 +160,8 @@ public final class InventoryWatch {
                 drop(watch);
             }
         }
+        // Still pending (their flag stays set), first in line next tick
+        PENDING.addAll(later);
         return sent;
     }
 

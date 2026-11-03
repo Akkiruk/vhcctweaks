@@ -26,12 +26,18 @@ import java.util.UUID;
  */
 public class BalanceNotifier {
 
-    private static final NumberFormat NUM_FMT = NumberFormat.getIntegerInstance(Locale.US);
+    /**
+     * 1,234,567: the text NumberFormat.getIntegerInstance(Locale.US) gives, but safe on several computer threads at
+     * once. A shared NumberFormat is not, and CC can run more than one computer thread.
+     */
+    static String fmt(long n) {
+        return String.format(Locale.US, "%,d", n);
+    }
 
     private BalanceNotifier() {}
 
     private static String fmtBal(long balance) {
-        return balance >= 0 ? " | Bal: " + NUM_FMT.format(balance) : "";
+        return balance >= 0 ? " | Bal: " + fmt(balance) : "";
     }
 
     /**
@@ -49,7 +55,7 @@ public class BalanceNotifier {
 
         MutableComponent msg = new TextComponent("")
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                .append(new TextComponent("-" + NUM_FMT.format(amount) + " tokens").withStyle(ChatFormatting.RED))
+                .append(new TextComponent("-" + fmt(amount) + " tokens").withStyle(ChatFormatting.RED))
                 .append(new TextComponent(" | " + reason).withStyle(ChatFormatting.GRAY))
                 .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
 
@@ -71,7 +77,7 @@ public class BalanceNotifier {
 
         MutableComponent msg = new TextComponent("")
                 .append(new TextComponent("[CCVault] ").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
-                .append(new TextComponent("+" + NUM_FMT.format(amount) + " tokens").withStyle(ChatFormatting.GREEN))
+                .append(new TextComponent("+" + fmt(amount) + " tokens").withStyle(ChatFormatting.GREEN))
                 .append(new TextComponent(" | " + reason).withStyle(ChatFormatting.GRAY))
                 .append(new TextComponent(fmtBal(newBalance)).withStyle(ChatFormatting.DARK_GRAY));
 

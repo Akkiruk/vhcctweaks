@@ -16,7 +16,8 @@
     "WiredModemElementMixin",
     "ModemHubMixin",
     "WirelessModemHubTypeMixin",
-    "BlockEntityWatchMixin"
+    "BlockEntityWatchMixin",
+    "DetailRegistryCopyMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -135,13 +135,8 @@ public class ComputerInteractionTracker {
     public static ServerPlayer getPlayer(int computerId) {
         UUID uuid = computerToPlayer.get(computerId);
         if (uuid == null) return null;
-        var server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) {
-            return null;
-        }
-        ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-        if (player == null || player.isRemoved()) return null;
-        return player;
+        // Called from ccvault on computer threads: the thread-safe lookup, and only a player on this server
+        return com.vhcctweaks.util.Safety.here(ServerLifecycleHooks.getCurrentServer(), uuid);
     }
 
     /**

@@ -1,6 +1,9 @@
 package com.vhcctweaks.detail;
 
+import com.vhcctweaks.VHCCTweaks;
 import dan200.computercraft.api.detail.IDetailProvider;
+import iskallia.vault.config.gear.VaultGearTierConfig;
+import iskallia.vault.gear.attribute.type.VaultGearAttributeTypeMerger;
 import iskallia.vault.gear.VaultGearRarity;
 import iskallia.vault.gear.VaultGearState;
 import iskallia.vault.gear.attribute.VaultGearAttributeInstance;
@@ -60,29 +63,51 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         try {
             Map<String, Object> vaultData = buildVaultData(stack);
             if (vaultData != null) {
-                // Anything without a parser here is still readable from Lua, and stays so after Vault changes
-                if (stack.hasTag()) {
+                // Only items this provider does not understand carry their raw NBT: parsed ones already say
+                // everything readable, and gear's NBT is mostly an opaque bit buffer
+                if (GENERIC.equals(vaultData.get("itemType")) && stack.hasTag()) {
                     String nbt = stack.getTag().toString();
                     if (nbt.length() <= MAX_RAW_NBT_CHARS) vaultData.put("rawNbt", nbt);
                 }
                 data.put("vaultData", vaultData);
             }
-        } catch (Exception ignored) {
-            // Silently ignore — VH data is unreadable for this item
+        } catch (Exception e) {
+            // An unreadable item gets no vaultData; the first one is logged so a broken parser does not go unseen
+            if (!loggedFailure) {
+                loggedFailure = true;
+                VHCCTweaks.LOGGER.debug("Vault item details failed for {} (later failures are not logged)", itemId, e);
+            }
         }
     }
+
+    /** A copy of a Vault Hunters stack, for building its details without touching the live item. Anything else as is. */
+    public static Object copyIfVault(Object object) {
+        try {
+            if (object instanceof ItemStack stack && !stack.isEmpty()) {
+                ResourceLocation id = stack.getItem().getRegistryName();
+                if (id != null && VAULT_NAMESPACES.contains(id.getNamespace())) return stack.copy();
+            }
+        } catch (RuntimeException e) {
+            com.vhcctweaks.util.Safety.logOnce("item detail copy", e);
+        }
+        return object;
+    }
+
+    private static final String GENERIC = "VaultItem";
+    private static volatile boolean loggedFailure;
 
     private Map<String, Object> buildVaultData(ItemStack stack) {
         Item item = stack.getItem();
 
+        // Tools and jewels are VaultGearItems too, so they are checked before the gear branch catches them
+        if (item instanceof ToolItem)             return parseTool(stack);
+        if (item instanceof JewelItem)            return parseJewel(stack);
         if (item instanceof VaultGearItem) {
             // VaultCharmItem implements VaultGearItem, need to check first
             if (item instanceof VaultCharmItem) return parseCharm(stack);
             if (item instanceof EtchingItem)    return parseEtching(stack);
             return parseGear(stack);
         }
-        if (item instanceof ToolItem)             return parseTool(stack);
-        if (item instanceof JewelItem)            return parseJewel(stack);
         if (item instanceof TrinketItem)          return parseTrinket(stack);
         if (item instanceof InscriptionItem)      return parseInscription(stack);
         if (item instanceof InfusedCatalystItem)  return parseCatalyst(stack);
@@ -107,7 +132,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         gear.put("itemType", "Gear");
 
         VaultGearData data = VaultGearData.read(stack);
-        gear.put("name", stack.getDisplayName().getString());
+        gear.put("name", displayName(stack));
         gear.put("level", data.getItemLevel());
         gear.put("rarity", data.getRarity().name());
         gear.put("state", data.getState().name());
@@ -135,7 +160,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         gear.put("repairSlots", buildRepairSlots(data));
 
         // Durability
-        gear.put("durability", buildDurability(stack));
+        gear.put("durability", buildDurability(stack, data));
 
         // Crafting potential (not present on UNIQUE rarity)
         if (data.getRarity() != VaultGearRarity.UNIQUE) {
@@ -153,23 +178,38 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         // Model
         data.getFirstValue(ModGearAttributes.GEAR_MODEL).ifPresent(loc -> gear.put("model", loc.toString()));
 
-        // Modifiers
-        gear.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT));
-        gear.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX));
-        gear.put("suffixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.SUFFIX));
-
-        // Attributes (base properties like durability, soulbound, etc.)
-        List<Map<String, Object>> attributes = new ArrayList<>();
-        data.getAllAttributes().forEach(instance -> {
-            // Skip attributes already represented elsewhere
-            if (isSkippedAttribute(instance)) return;
-            attributes.add(VaultModifierHelper.parseAttributeInstance(stack, instance, data));
-        });
-        if (!attributes.isEmpty()) {
-            gear.put("attributes", attributes);
-        }
+        // Modifiers, each parsed once against one tier config, and the real base attributes
+        putModifiers(gear, stack, data);
+        putBaseAttributes(gear, stack, data);
 
         return gear;
+    }
+
+    /** implicits, prefixes and suffixes, with the item's tier config looked up once. */
+    private static void putModifiers(Map<String, Object> out, ItemStack stack, VaultGearData data) {
+        Optional<VaultGearTierConfig> tierCfg = VaultGearTierConfig.getConfig(stack);
+        out.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT, tierCfg));
+        out.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX, tierCfg));
+        out.put("suffixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.SUFFIX, tierCfg));
+    }
+
+    /**
+     * The item's base attributes (durability, repair slots and the like), not its modifiers. Before 2.2.36 this list
+     * repeated every modifier, because Vault Hunters' getAllAttributes returns the modifiers again. Attributes already
+     * reported under their own keys are left out.
+     */
+    private void putBaseAttributes(Map<String, Object> out, ItemStack stack, VaultGearData data) {
+        List<Map<String, Object>> attributes = new ArrayList<>();
+        for (VaultGearAttributeInstance<?> instance : data.getAttributes()) {
+            if (isSkippedAttribute(instance)) continue;
+            attributes.add(VaultModifierHelper.parseAttributeInstance(stack, instance, data));
+        }
+        if (!attributes.isEmpty()) out.put("attributes", attributes);
+    }
+
+    /** The item's own name, as CC's displayName gives it: getDisplayName would wrap it in square brackets. */
+    private static String displayName(ItemStack stack) {
+        return stack.getHoverName().getString();
     }
 
     // ================== Tool ==================
@@ -179,14 +219,12 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         tool.put("itemType", "Tool");
 
         VaultGearData data = VaultGearData.read(stack);
-        tool.put("name", stack.getDisplayName().getString());
+        tool.put("name", displayName(stack));
         tool.put("level", data.getItemLevel());
         tool.put("rarity", data.getRarity().name());
         tool.put("repairSlots", buildRepairSlots(data));
-        tool.put("durability", buildDurability(stack));
-        tool.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT));
-        tool.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX));
-        tool.put("suffixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.SUFFIX));
+        tool.put("durability", buildDurability(stack, data));
+        putModifiers(tool, stack, data);
 
         return tool;
     }
@@ -198,12 +236,10 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         jewel.put("itemType", "Jewel");
 
         VaultGearData data = VaultGearData.read(stack);
-        jewel.put("name", stack.getDisplayName().getString());
+        jewel.put("name", displayName(stack));
         jewel.put("level", data.getItemLevel());
         jewel.put("rarity", data.getRarity().name());
-        jewel.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT));
-        jewel.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX));
-        jewel.put("suffixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.SUFFIX));
+        putModifiers(jewel, stack, data);
 
         return jewel;
     }
@@ -220,7 +256,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         }
 
         trinket.put("identified", true);
-        trinket.put("name", stack.getDisplayName().getString());
+        trinket.put("name", displayName(stack));
 
         TrinketItem trinketItem = (TrinketItem) stack.getItem();
         trinket.put("uses", trinketItem.getUses(stack));
@@ -255,7 +291,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
                 break;
         }
 
-        charm.put("name", stack.getDisplayName().getString());
+        charm.put("name", displayName(stack));
         charm.put("rarity", data.getRarity().name());
 
         VaultCharmItem charmItem = (VaultCharmItem) stack.getItem();
@@ -264,7 +300,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         VaultCharmItem.getGod(stack).ifPresent(god -> charm.put("god", god.getName()));
         charm.put("godReputation", VaultCharmItem.getGodReputation(stack));
 
-        charm.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX));
+        charm.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX, VaultGearTierConfig.getConfig(stack)));
 
         return charm;
     }
@@ -359,7 +395,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         Map<String, Object> doll = new LinkedHashMap<>();
         doll.put("itemType", "VaultDoll");
 
-        doll.put("name", stack.getDisplayName().getString());
+        doll.put("name", displayName(stack));
 
         VaultDollItem.getPlayerGameProfile(stack).ifPresent(profile -> {
             doll.put("playerName", profile.getName());
@@ -382,7 +418,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
     private Map<String, Object> parseCard(ItemStack stack) {
         Map<String, Object> card = new LinkedHashMap<>();
         card.put("itemType", "Card");
-        card.put("name", stack.getDisplayName().getString());
+        card.put("name", displayName(stack));
 
         try {
             var cardObj = CardItem.getCard(stack);
@@ -400,7 +436,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
     private Map<String, Object> parseAugment(ItemStack stack) {
         Map<String, Object> augment = new LinkedHashMap<>();
         augment.put("itemType", "Augment");
-        augment.put("name", stack.getDisplayName().getString());
+        augment.put("name", displayName(stack));
 
         // Augments store their data in NBT; extract what we can
         if (stack.hasTag()) {
@@ -416,7 +452,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
     private Map<String, Object> parseEtching(ItemStack stack) {
         Map<String, Object> etching = new LinkedHashMap<>();
         etching.put("itemType", "Etching");
-        etching.put("name", stack.getDisplayName().getString());
+        etching.put("name", displayName(stack));
 
         VaultGearData data = VaultGearData.read(stack);
         etching.put("level", data.getItemLevel());
@@ -425,14 +461,8 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
 
         if (data.getState() == VaultGearState.IDENTIFIED) {
             etching.put("identified", true);
-            List<Map<String, Object>> attributes = new ArrayList<>();
-            data.getAllAttributes().forEach(instance -> {
-                if (!isSkippedAttribute(instance)) attributes.add(VaultModifierHelper.parseAttributeInstance(stack, instance, data));
-            });
-            if (!attributes.isEmpty()) etching.put("attributes", attributes);
-            etching.put("implicits", VaultModifierHelper.parseModifiers(stack, data, AffixType.IMPLICIT));
-            etching.put("prefixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.PREFIX));
-            etching.put("suffixes", VaultModifierHelper.parseModifiers(stack, data, AffixType.SUFFIX));
+            putBaseAttributes(etching, stack, data);
+            putModifiers(etching, stack, data);
         } else {
             etching.put("identified", false);
         }
@@ -445,7 +475,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
     private Map<String, Object> parseGenericVaultItem(ItemStack stack, ResourceLocation regName) {
         Map<String, Object> generic = new LinkedHashMap<>();
         generic.put("itemType", "VaultItem");
-        generic.put("name", stack.getDisplayName().getString());
+        generic.put("name", displayName(stack));
         generic.put("registryName", regName.toString());
 
         try {
@@ -472,11 +502,34 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         return repair;
     }
 
-    private Map<String, Object> buildDurability(ItemStack stack) {
+    /**
+     * For these Vault Hunters classes getMaxDamage is VaultGearData.read(stack).get(DURABILITY, intSum()), checked in
+     * 3.21.72's bytecode, so the data already decoded gives the same number without decoding it again. A class that
+     * overrides getMaxDamage (an addon's, or a later Vault Hunters) keeps its own answer. Recheck when Vault Hunters updates.
+     */
+    private static final Set<String> MAX_DAMAGE_IS_GEAR_DURABILITY = Set.of(
+            "iskallia.vault.item.gear.VaultSwordItem", "iskallia.vault.item.gear.VaultAxeItem",
+            "iskallia.vault.item.gear.VaultArmorItem", "iskallia.vault.item.gear.VaultShieldItem",
+            "iskallia.vault.item.gear.WandItem", "iskallia.vault.item.gear.FocusItem",
+            "iskallia.vault.item.gear.IdolItem", "iskallia.vault.item.tool.ToolItem");
+    private static final ClassValue<Boolean> DURABILITY_FROM_DATA = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            try {
+                return MAX_DAMAGE_IS_GEAR_DURABILITY.contains(type.getMethod("getMaxDamage", ItemStack.class).getDeclaringClass().getName());
+            } catch (NoSuchMethodException e) {
+                return false;
+            }
+        }
+    };
+
+    private Map<String, Object> buildDurability(ItemStack stack, VaultGearData data) {
         Map<String, Object> dur = new LinkedHashMap<>();
         try {
             VaultGearItem vgi = VaultGearItem.of(stack);
-            int max = vgi.getMaxDamage(stack);
+            int max = DURABILITY_FROM_DATA.get(stack.getItem().getClass())
+                    ? data.get(ModGearAttributes.DURABILITY, VaultGearAttributeTypeMerger.intSum())
+                    : vgi.getMaxDamage(stack);
             dur.put("total", max);
             dur.put("current", max - vgi.getDamage(stack));
         } catch (Exception ignored) {

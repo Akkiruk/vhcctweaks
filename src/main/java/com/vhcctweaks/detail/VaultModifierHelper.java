@@ -50,14 +50,26 @@ public final class VaultModifierHelper {
     // --- Modifier list builders ---
 
     public static List<Map<String, Object>> parseModifiers(ItemStack stack, VaultGearData data, AffixType type) {
-        return data.getModifiers(type).stream()
-                .map(mod -> parseModifier(stack, mod, data.getItemLevel()))
-                .collect(Collectors.toList());
+        return parseModifiers(stack, data, type, VaultGearTierConfig.getConfig(stack));
+    }
+
+    /** With the item's tier config looked up once by the caller, not once per modifier. */
+    public static List<Map<String, Object>> parseModifiers(ItemStack stack, VaultGearData data, AffixType type,
+                                                           Optional<VaultGearTierConfig> tierCfg) {
+        List<VaultGearModifier<?>> modifiers = data.getModifiers(type);
+        List<Map<String, Object>> parsed = new ArrayList<>(modifiers.size());
+        for (VaultGearModifier<?> mod : modifiers) parsed.add(parseModifier(stack, mod, data.getItemLevel(), tierCfg));
+        return parsed;
     }
 
     // --- Single modifier ---
 
     public static Map<String, Object> parseModifier(ItemStack stack, VaultGearModifier<?> modifier, int itemLevel) {
+        return parseModifier(stack, modifier, itemLevel, VaultGearTierConfig.getConfig(stack));
+    }
+
+    public static Map<String, Object> parseModifier(ItemStack stack, VaultGearModifier<?> modifier, int itemLevel,
+                                                    Optional<VaultGearTierConfig> tierCfg) {
         Map<String, Object> map = new LinkedHashMap<>();
 
         String name = modifier.getAttribute().getReader().getModifierName();
@@ -98,7 +110,9 @@ public final class VaultModifierHelper {
 
         // Try to get tier config for min/max range
         try {
-            VaultGearTierConfig.ModifierConfigRange config = getConfigRange(stack, modifier, itemLevel);
+            VaultGearTierConfig.ModifierConfigRange config = tierCfg
+                    .map(cfg -> cfg.getTierConfigRange(modifier, itemLevel))
+                    .orElse(VaultGearTierConfig.ModifierConfigRange.empty());
             putRolledValue(map, value, config);
         } catch (Exception e) {
             // Fallback: value only, no range
@@ -214,25 +228,35 @@ public final class VaultModifierHelper {
         }
     }
 
+    /**
+     * A modifier with no tier range (no config, as for every tool, or one missing from its gear type's config) gets
+     * its value only. That case is checked for, not caught: a throw per modifier cost more than the rest of its parse.
+     */
     private static void putRolledValue(Map<String, Object> map, Object value, VaultGearTierConfig.ModifierConfigRange config) {
+        Object lo = config.minAvailableConfig();
+        Object hi = config.maxAvailableConfig();
         if (value instanceof Integer intVal) {
             map.put("value", intVal);
-            try {
-                map.put("min", ((IntegerAttributeGenerator.Range) config.minAvailableConfig()).min);
-                map.put("max", ((IntegerAttributeGenerator.Range) config.maxAvailableConfig()).max);
-            } catch (Exception ignored) {}
+            if (lo instanceof IntegerAttributeGenerator.Range min) {
+                map.put("min", min.min);
+                if (hi instanceof IntegerAttributeGenerator.Range max) map.put("max", max.max);
+            }
         } else if (value instanceof Float fVal) {
             map.put("value", fVal);
-            try {
-                map.put("min", (Float) FieldUtils.readField(config.minAvailableConfig(), "min", true));
-                map.put("max", (Float) FieldUtils.readField(config.maxAvailableConfig(), "max", true));
-            } catch (Exception ignored) {}
+            if (lo != null && hi != null) {
+                try {
+                    map.put("min", (Float) FieldUtils.readField(lo, "min", true));
+                    map.put("max", (Float) FieldUtils.readField(hi, "max", true));
+                } catch (Exception ignored) {}
+            }
         } else if (value instanceof Double dVal) {
             map.put("value", dVal);
-            try {
-                map.put("min", (Double) FieldUtils.readField(config.minAvailableConfig(), "min", true));
-                map.put("max", (Double) FieldUtils.readField(config.maxAvailableConfig(), "max", true));
-            } catch (Exception ignored) {}
+            if (lo != null && hi != null) {
+                try {
+                    map.put("min", (Double) FieldUtils.readField(lo, "min", true));
+                    map.put("max", (Double) FieldUtils.readField(hi, "max", true));
+                } catch (Exception ignored) {}
+            }
         } else if (value instanceof Boolean bVal) {
             map.put("value", bVal);
         } else if (value instanceof String sVal) {
@@ -259,12 +283,14 @@ public final class VaultModifierHelper {
             sub.put("ability", abilityLevel.getAbility());
             sub.put("levelChange", abilityLevel.getLevelChange());
             map.put("value", sub);
-            try {
-                Object minCfg = config.minAvailableConfig();
-                Object maxCfg = config.maxAvailableConfig();
-                map.put("min", FieldUtils.readField(minCfg, "levelChange", true));
-                map.put("max", FieldUtils.readField(maxCfg, "levelChange", true));
-            } catch (Exception ignored) {}
+            Object minCfg = config.minAvailableConfig();
+            Object maxCfg = config.maxAvailableConfig();
+            if (minCfg != null && maxCfg != null) {
+                try {
+                    map.put("min", FieldUtils.readField(minCfg, "levelChange", true));
+                    map.put("max", FieldUtils.readField(maxCfg, "levelChange", true));
+                } catch (Exception ignored) {}
+            }
         } else if (value instanceof TalentLevelAttribute talentLevel) {
             Map<String, Object> sub = new LinkedHashMap<>();
             sub.put("talent", talentLevel.getTalent());
@@ -338,12 +364,5 @@ public final class VaultModifierHelper {
             map.put("value", String.valueOf(value));
         }
         return map;
-    }
-
-    private static VaultGearTierConfig.ModifierConfigRange getConfigRange(
-            ItemStack stack, VaultGearModifier<?> modifier, int level) {
-        return VaultGearTierConfig.getConfig(stack)
-                .map(tierCfg -> tierCfg.getTierConfigRange(modifier, level))
-                .orElse(VaultGearTierConfig.ModifierConfigRange.empty());
     }
 }

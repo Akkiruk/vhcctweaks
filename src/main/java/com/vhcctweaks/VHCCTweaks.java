@@ -61,6 +61,8 @@ public class VHCCTweaks {
         MinecraftForge.EVENT_BUS.register(LinkManager.class);
         // inventory_changed: one event per watched inventory per computer per tick
         MinecraftForge.EVENT_BUS.register(InventoryWatch.class);
+        // Who is on this server, kept for lookups from computer threads
+        MinecraftForge.EVENT_BUS.register(com.vhcctweaks.util.Safety.class);
 
         // Patch VH config files early (adds blacklist entries and tunes Advanced Peripherals)
         VaultConfigPatcher.patchIfNeeded(FMLPaths.CONFIGDIR.get());
@@ -95,6 +97,7 @@ public class VHCCTweaks {
         SessionAuthManager.reset();
         ComputerInteractionTracker.reset();
         ComputerIndex.reset();
+        com.vhcctweaks.util.Safety.resetPlayers();
         LinkManager.reset();
         InventoryWatch.reset();
         ComputerPlacementTracker.init(dataDir);

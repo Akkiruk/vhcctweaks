@@ -332,6 +332,8 @@ public class SessionAuthManager {
         Safety.guard("CCVault logout", () -> {
             if (event.getPlayer() instanceof ServerPlayer player) {
                 clearPlayerSessions(player.getUUID());
+                // A half-sent /vhcc pc upload (up to 1 MB) would otherwise stay in memory until the server stops
+                com.vhcctweaks.remote.RemoteControl.forget(player.getUUID());
                 VHCCTweaks.LOGGER.debug("CCVault: Cleared all auth state for {}", player.getName().getString());
             }
         });

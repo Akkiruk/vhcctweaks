@@ -48,6 +48,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
 
     public static void setRootDir(Path dir) {
         rootDir = dir;
+        USAGE.clear();
     }
 
     @Override
@@ -128,12 +129,62 @@ public class VHCCTweaksAPI implements ILuaAPI {
         try {
             long oldCost = Files.isRegularFile(target) ? FileQuota.cost(Files.size(target)) : 0;
             long limit = ModConfig.VHCC_MAX_BYTES_PER_COMPUTER.get();
-            if (!FileQuota.fits(FileQuota.usage(computerRoot()), oldCost, newBytes, limit)) {
+            if (!FileQuota.fits(usage(), oldCost, newBytes, limit)) {
                 throw new LuaException("vhcc: out of space (limit " + (limit / 1024) + " KB per computer)");
             }
         } catch (IOException e) {
             throw new LuaException("vhcc: could not check space - " + e.getMessage());
         }
+    }
+
+    // ===== Space used, cached =====
+    // Walking the whole folder on every write cost up to a quarter of a second on a full one, on the computer thread.
+    // The total is kept per computer and moved by each write and delete; anything else, and anything that fails part
+    // way, drops it so the next call walks again. A walk older than a minute is redone, for changes made from outside.
+
+    private record Usage(long bytes, long walkedAt) {}
+
+    private static final Map<Integer, Usage> USAGE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long USAGE_MAX_AGE_MS = 60_000;
+
+    private long usage() throws IOException, LuaException {
+        Usage cached = USAGE.get(computerId);
+        long now = System.currentTimeMillis();
+        if (cached == null || now - cached.walkedAt() > USAGE_MAX_AGE_MS) {
+            cached = new Usage(FileQuota.usage(computerRoot()), now);
+            USAGE.put(computerId, cached);
+        }
+        return cached.bytes();
+    }
+
+    private void adjustUsage(long delta) {
+        USAGE.computeIfPresent(computerId, (id, u) -> new Usage(u.bytes() + delta, u.walkedAt()));
+    }
+
+    private void forgetUsage() {
+        USAGE.remove(computerId);
+    }
+
+    /** Folders createDirectories will add for dir, each costing FileQuota.MIN_ENTRY_BYTES. */
+    private int missingDirs(Path dir) throws LuaException {
+        Path root = computerRoot();
+        int count = 0;
+        for (Path p = dir; p != null && p.startsWith(root) && !Files.isDirectory(p); p = p.getParent()) count++;
+        return count;
+    }
+
+    /** Writes or appends, keeping the cached total right: the file's new cost, less its old one, plus new folders. */
+    private void writeCounted(Path target, byte[] bytes, StandardOpenOption mode) throws IOException, LuaException {
+        long oldCost = Files.isRegularFile(target) ? FileQuota.cost(Files.size(target)) : 0;
+        int newDirs = missingDirs(target.getParent());
+        try {
+            Files.createDirectories(target.getParent());
+            Files.write(target, bytes, StandardOpenOption.CREATE, mode);
+        } catch (IOException | RuntimeException e) {
+            forgetUsage();
+            throw e;
+        }
+        adjustUsage(FileQuota.cost(Files.size(target)) - oldCost + newDirs * FileQuota.MIN_ENTRY_BYTES);
     }
 
     // ===== API Functions =====
@@ -170,10 +221,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
         Path target = resolve(path);
         requireSpace(target, bytes.length);
         try {
-            Files.createDirectories(target.getParent());
-            Files.write(target, bytes,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
+            writeCounted(target, bytes, StandardOpenOption.TRUNCATE_EXISTING);
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: write failed - " + e.getMessage());
@@ -191,10 +239,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
         Path target = resolve(path);
         try {
             requireSpace(target, (Files.isRegularFile(target) ? Files.size(target) : 0) + bytes.length);
-            Files.createDirectories(target.getParent());
-            Files.write(target, bytes,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
+            writeCounted(target, bytes, StandardOpenOption.APPEND);
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: append failed - " + e.getMessage());
@@ -324,6 +369,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
         requireSpace(target, 0);
         try {
             Files.createDirectories(target);
+            forgetUsage();
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: makeDir failed - " + e.getMessage());
@@ -352,6 +398,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
         }
         try {
             Files.delete(target);
+            forgetUsage();
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: delete failed - " + e.getMessage());
@@ -375,6 +422,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
         try {
             Files.createDirectories(dest.getParent());
             Files.move(source, dest);
+            forgetUsage();
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: move failed - " + e.getMessage());
@@ -402,6 +450,7 @@ public class VHCCTweaksAPI implements ILuaAPI {
             requireSpace(dest, Files.size(source));
             Files.createDirectories(dest.getParent());
             Files.copy(source, dest);
+            forgetUsage();
             return true;
         } catch (IOException e) {
             throw new LuaException("vhcc: copy failed - " + e.getMessage());

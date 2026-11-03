@@ -92,22 +92,52 @@ public class TransactionLedger {
         if (file == null || !Files.exists(file)) file = ledgerFile;
         if (file == null || !Files.exists(file)) return null;
 
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.contains(txId)) continue;
+        // txIds are unique, so the first match from the end is the one entry; recent ones are found at once
+        Map<String, Object>[] found = new Map[1];
+        try {
+            forEachLineFromEnd(file, line -> {
+                if (!line.contains(txId)) return true;
                 Map<?, ?> entry = parseLine(line);
-                if (entry == null || !txId.equals(stringVal(entry, "txId"))) continue;
-
+                if (entry == null || !txId.equals(stringVal(entry, "txId"))) return true;
                 // Security filter: participant must be involved
-                if (!entryParticipants(entry).contains(participantUuid)) continue;
-
-                return toLuaMap(entry);
-            }
+                if (!entryParticipants(entry).contains(participantUuid)) return true;
+                found[0] = toLuaMap(entry);
+                return false;
+            });
         } catch (IOException e) {
             VHCCTweaks.LOGGER.error("CCVault: Failed to read ledger for txId lookup", e);
         }
-        return null;
+        return found[0];
+    }
+
+    /**
+     * Visits a file's lines from the last to the first, stopping when visit returns false. Reads 8 KB blocks from the
+     * end, so the newest entries cost the same however long the file has grown. Lines end in '\n', which never occurs
+     * inside a UTF-8 character.
+     */
+    static void forEachLineFromEnd(Path file, java.util.function.Predicate<String> visit) throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
+            long pos = raf.length();
+            byte[] buf = new byte[8192];
+            byte[] carry = new byte[0];
+            while (pos > 0) {
+                int n = (int) Math.min(buf.length, pos);
+                pos -= n;
+                raf.seek(pos);
+                raf.readFully(buf, 0, n);
+                byte[] chunk = new byte[n + carry.length];
+                System.arraycopy(buf, 0, chunk, 0, n);
+                System.arraycopy(carry, 0, chunk, n, carry.length);
+                int end = chunk.length;
+                for (int i = chunk.length - 1; i >= 0; i--) {
+                    if (chunk[i] != '\n') continue;
+                    if (!visit.test(new String(chunk, i + 1, end - i - 1, StandardCharsets.UTF_8))) return;
+                    end = i;
+                }
+                carry = Arrays.copyOf(chunk, end);
+            }
+            if (carry.length > 0) visit.test(new String(carry, StandardCharsets.UTF_8));
+        }
     }
 
     /**
@@ -197,6 +227,20 @@ public class TransactionLedger {
 
     private static List<Map<String, Object>> readHistoryFile(Path file, int limit, UUID participantUuid) {
         LinkedList<Map<String, Object>> results = new LinkedList<>();
+
+        // A player's own file holds only their entries: the last `limit` that parse are read from the end
+        if (participantUuid == null) {
+            try {
+                forEachLineFromEnd(file, line -> {
+                    Map<?, ?> entry = parseLine(line);
+                    if (entry != null) results.addFirst(toLuaMap(entry));
+                    return results.size() < limit;
+                });
+            } catch (IOException e) {
+                VHCCTweaks.LOGGER.error("CCVault: Failed to read ledger history from {}", file.getFileName(), e);
+            }
+            return results;
+        }
 
         try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             String line;

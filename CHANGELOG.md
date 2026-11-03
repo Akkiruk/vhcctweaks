@@ -29,6 +29,24 @@ Bigger one. Computers can finally reach each other's stuff without running cable
 - `ccvault.getPlayerEquipment(player)` shows what an online player is wearing and holding, Curios slots too, with the same item details `getItemDetail` gives.
 - The host paying a player with `transfer("host", "player:Name", ...)` no longer needs that player to have touched the computer recently, so a winner who walked off still gets paid. Charging a player still needs the touch.
 - `interactionStaleSeconds` can go up to an hour now (was 5 minutes).
+- A player who's on another server of the network doesn't count as here, even if the economy still calls them online. Asking about them just gets a clean "not here" answer.
+
+### Vault item details
+
+These change what `getItemDetail` gives for Vault items, so check scripts that read `vaultData`:
+
+- Looking at an item no longer changes it. Vault Hunters used to write cache tags into some pieces the first time anything read them, which changed their `nbt` hash. Scripts that track items by that hash can rely on it now.
+- `attributes` on gear and etchings used to repeat every modifier. It now has the item's real base attributes, like durability.
+- Tools and jewels say `"Tool"` and `"Jewel"` like the docs always claimed, instead of `"Gear"`.
+- `vaultData.name` lost its square brackets, so it matches `displayName`.
+- `rawNbt` is only there for Vault items the mod doesn't know how to read. On gear it was mostly an unreadable blob anyway.
+- Reading a chest of gear is a good bit cheaper on the server.
+
+### Other fixes
+
+- `vhcc.write` and `append` don't walk the computer's whole folder on every call anymore. On a full folder that could hold up every computer on the server for a quarter of a second.
+- `getTransactionHistory` and `verifyTransaction` read the ledger from the end, so a long history doesn't slow them down.
+- A half-finished `/vhcc pc` upload is dropped when the player leaves.
 
 ## [2.2.35] - 2026-10-31
 

@@ -80,15 +80,57 @@ public final class Safety {
         return inThisServersList && !removed && connected && !disconnected;
     }
 
+    /**
+     * A player on this server by UUID. On the server thread this asks the player list; on a computer thread it asks a
+     * snapshot the server thread keeps, because the player list is a plain list that a login or logout can change
+     * underneath a reader on another thread.
+     */
     public static ServerPlayer here(MinecraftServer server, UUID uuid) {
         if (server == null || uuid == null) return null;
-        ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+        ServerPlayer player = server.isSameThread() ? server.getPlayerList().getPlayer(uuid) : BY_UUID.get(uuid);
         return isHere(player) ? player : null;
     }
 
+    /** A player on this server by name, ignoring case as the player list does. */
     public static ServerPlayer here(MinecraftServer server, String name) {
         if (server == null || name == null) return null;
-        ServerPlayer player = server.getPlayerList().getPlayerByName(name);
+        ServerPlayer player = server.isSameThread() ? server.getPlayerList().getPlayerByName(name)
+                : BY_NAME.get(name.toLowerCase(java.util.Locale.ROOT));
         return isHere(player) ? player : null;
+    }
+
+    // ===== Who is here, for computer threads. Written on the server thread only. =====
+
+    private static final java.util.Map<UUID, ServerPlayer> BY_UUID = new ConcurrentHashMap<>();
+    private static final java.util.Map<String, ServerPlayer> BY_NAME = new ConcurrentHashMap<>();
+
+    public static void resetPlayers() {
+        BY_UUID.clear();
+        BY_NAME.clear();
+    }
+
+    private static void track(ServerPlayer player) {
+        BY_UUID.put(player.getUUID(), player);
+        BY_NAME.put(player.getGameProfile().getName().toLowerCase(java.util.Locale.ROOT), player);
+    }
+
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onLogin(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        guard("player snapshot login", () -> { if (event.getPlayer() instanceof ServerPlayer p) track(p); });
+    }
+
+    /** Respawning makes a new player object: the snapshot has to follow it. */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onRespawn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerRespawnEvent event) {
+        guard("player snapshot respawn", () -> { if (event.getPlayer() instanceof ServerPlayer p) track(p); });
+    }
+
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        guard("player snapshot logout", () -> {
+            if (!(event.getPlayer() instanceof ServerPlayer p)) return;
+            BY_UUID.remove(p.getUUID(), p);
+            BY_NAME.remove(p.getGameProfile().getName().toLowerCase(java.util.Locale.ROOT), p);
+        });
     }
 }

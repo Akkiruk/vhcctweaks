@@ -367,7 +367,7 @@ public class CCVaultAPI implements ILuaAPI {
     private static String nameOf(UUID uuid) {
         var server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return uuid.toString();
-        ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+        ServerPlayer online = Safety.here(server, uuid);
         if (online != null) return online.getGameProfile().getName();
         return server.getProfileCache().get(uuid).map(GameProfile::getName).orElse(uuid.toString());
     }
@@ -749,13 +749,17 @@ public class CCVaultAPI implements ILuaAPI {
         var server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return new PlayerLookup.Result(PlayerLookup.Status.UNKNOWN, null);
 
-        try {
-            return new PlayerLookup.Result(PlayerLookup.Status.FOUND, UUID.fromString(playerName));
-        } catch (IllegalArgumentException ignored) {
-            // Not a UUID string — continue with name-based lookup.
+        // Every UUID string has a '-' and no player name can, so plain names skip the throwing parse
+        if (playerName.indexOf('-') >= 0) {
+            try {
+                return new PlayerLookup.Result(PlayerLookup.Status.FOUND, UUID.fromString(playerName));
+            } catch (IllegalArgumentException ignored) {
+                // Not a UUID string — continue with name-based lookup.
+            }
         }
 
-        ServerPlayer onlinePlayer = server.getPlayerList().getPlayerByName(playerName);
+        // Only to turn a name into a UUID; the thread-safe lookup, as this runs on computer threads
+        ServerPlayer onlinePlayer = Safety.here(server, playerName);
         if (onlinePlayer != null) {
             return new PlayerLookup.Result(PlayerLookup.Status.FOUND, onlinePlayer.getUUID());
         }

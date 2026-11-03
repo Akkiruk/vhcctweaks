@@ -101,8 +101,7 @@ public class BalanceNotifier {
     }
 
     private static ServerPlayer getPlayer(UUID uuid) {
-        var server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) return null;
-        return server.getPlayerList().getPlayer(uuid);
+        // Called from transfers on computer threads: the thread-safe lookup, and only a player on this server
+        return com.vhcctweaks.util.Safety.here(ServerLifecycleHooks.getCurrentServer(), uuid);
     }
 }

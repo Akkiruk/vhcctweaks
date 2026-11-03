@@ -4,6 +4,9 @@ import com.vhcctweaks.VHCCTweaks;
 import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.event.ServerChatEvent;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+
+import java.util.regex.Pattern;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -19,6 +22,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(targets = "de.srendi.advancedperipherals.common.events.Events", remap = false)
 public class ChatBoxEventsMixin {
+
+    // Compiled once: every command on the server passes through here
+    @Unique
+    private static final Pattern VHCCTWEAKS_HIDDEN_SAY = Pattern.compile("(?i)^/?say\\s+\\$.*");
 
     /**
      * Intercept the onChatBox handler (ServerChatEvent).
@@ -47,7 +54,7 @@ public class ChatBoxEventsMixin {
     private static void vhcctweaks_blockHiddenCommandChannel(CommandEvent event, CallbackInfo ci) {
         try {
             String fullCommand = event.getParseResults().getReader().getString();
-            if (fullCommand.matches("(?i)^/?say\\s+\\$.*")) {
+            if (VHCCTWEAKS_HIDDEN_SAY.matcher(fullCommand).matches()) {
                 ci.cancel();
                 VHCCTweaks.LOGGER.debug("Blocked AP hidden command channel (say $ prefix)");
             }

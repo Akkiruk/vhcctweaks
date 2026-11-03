@@ -10,7 +10,10 @@
 The Vault Item Detail API automatically enriches CC:Tweaked's `getItemDetail()` with comprehensive Vault Hunters item data. **No special block or peripheral is required** — it works with any inventory (chests, barrels, shulker boxes, modded inventories, turtle inventories, etc.).
 
 When you call `getItemDetail()` on a slot containing a VH item, the returned table will include a `vaultData` key with all the item's VH-specific data — gear modifiers, trinket effects, crystal objectives, jewel stats, and more.
-nEvery item with data also has `rawNbt`, its full NBT as text (up to 32 KB). Use it for anything `vaultData` has no field for. Items in the `woldsvaults` and `vaultadditions` namespaces are covered too. Wold's gear uses `the_vault` IDs, such as `the_vault:battlestaff`, and reads as normal gear.
+
+Items this API has no parser for (`itemType = "VaultItem"`) also have `rawNbt`, their full NBT as text (up to 32 KB), for anything `vaultData` has no field for. Since 2.2.36 parsed item types no longer carry `rawNbt`. Items in the `woldsvaults` and `vaultadditions` namespaces are covered too. Wold's gear uses `the_vault` IDs, such as `the_vault:battlestaff`, and reads as normal gear.
+
+Reading details never changes the item (2.2.36). Vault Hunters fills in cache tags when it is asked about an item, so details are built from a copy, and the `nbt` hash from `list()` stays the same before and after `getItemDetail`, `listDetailed` or `ccvault.getPlayerEquipment`.
 
 ---
 
@@ -81,7 +84,7 @@ This means:
 local detail = chest.getItemDetail(slot)
 local gear = detail.vaultData
 -- gear.itemType       = "Gear"
--- gear.name           = "Velvet Netherite Sword"     (display name)
+-- gear.name           = "Velvet Netherite Sword"     (display name, the same as CC's displayName; no square brackets since 2.2.36)
 -- gear.level          = 75                            (item level)
 -- gear.rarity         = "RARE"                        (SCRAPPY|COMMON|RARE|EPIC|OMEGA|UNIQUE|SPECIAL|CHAOTIC)
 -- gear.state          = "IDENTIFIED"                  (UNIDENTIFIED|ROLLING|IDENTIFIED)
@@ -104,10 +107,14 @@ local gear = detail.vaultData
 -- gear.implicits = { ... }    (see Modifier format below)
 -- gear.prefixes  = { ... }
 -- gear.suffixes  = { ... }
--- gear.attributes = { ... }   (base attributes not covered above)
+-- gear.attributes = { ... }   (base attributes not covered above, as { name = "...", value = ... })
 ```
 
+Before 2.2.36 `gear.attributes` (and `etching.attributes`) repeated every implicit, prefix and suffix. It now lists the item's base attributes, such as durability, and is often short or absent.
+
 ### Tool
+
+Before 2.2.36 tools and jewels were caught by the gear parser and reported `itemType = "Gear"`. They now get their own types below.
 
 ```lua
 -- tool.itemType  = "Tool"

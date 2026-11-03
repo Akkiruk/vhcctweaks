@@ -2,6 +2,7 @@ package com.vhcctweaks.link;
 
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
+import com.vhcctweaks.util.Safety;
 import dan200.computercraft.api.lua.IArguments;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.LuaException;
@@ -320,6 +321,14 @@ public final class LinkManager {
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        if (LINKS_BY_TARGET.isEmpty() && DIRTY.isEmpty()) {
+            wiredDirty = false;
+            return;
+        }
+        Safety.guard("LinkManager tick", LinkManager::tick);
+    }
+
+    private static void tick() {
         if (LINKS_BY_TARGET.isEmpty()) {
             if (!DIRTY.isEmpty()) DIRTY.clear();
             wiredDirty = false;
@@ -481,7 +490,8 @@ public final class LinkManager {
     static UUID ownerOf(ServerComputer computer) {
         if (computer == null) return null;
         if (computer instanceof PocketServerComputer pocket) {
-            return pocket.getEntity() instanceof ServerPlayer player && !(player instanceof FakePlayer) ? player.getUUID() : null;
+            return pocket.getEntity() instanceof ServerPlayer player && !(player instanceof FakePlayer) && Safety.isHere(player)
+                    ? player.getUUID() : null;
         }
         return ComputerPlacementTracker.getOwner(computer.getID());
     }

@@ -19,11 +19,11 @@ public abstract class BlockEntityWatchMixin {
 
     @Inject(method = "m_6596_()V", at = @At("HEAD"))
     private void vhcctweaks_contentsChanged(CallbackInfo ci) {
-        if (InventoryWatch.active) InventoryWatch.onChanged(this);
+        if (InventoryWatch.active) InventoryWatch.onChangedSafely(this);
     }
 
     @Inject(method = "m_7651_()V", at = @At("HEAD"))
     private void vhcctweaks_removed(CallbackInfo ci) {
-        if (InventoryWatch.active) InventoryWatch.onRemoved(this);
+        if (InventoryWatch.active) InventoryWatch.onRemovedSafely(this);
     }
 }

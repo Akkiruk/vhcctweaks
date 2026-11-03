@@ -3,6 +3,7 @@ package com.vhcctweaks.mixin;
 import com.vhcctweaks.link.LinkManager;
 import dan200.computercraft.api.network.wired.IWiredNetworkChange;
 import dan200.computercraft.shared.peripheral.modem.wired.WiredModemElement;
+import com.vhcctweaks.util.Safety;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,6 +15,6 @@ public abstract class WiredModemElementMixin {
 
     @Inject(method = "networkChanged", at = @At("TAIL"))
     private void vhcctweaks_wiredChanged(IWiredNetworkChange change, CallbackInfo ci) {
-        LinkManager.onWiredChanged();
+        Safety.guard("wired network changed", LinkManager::onWiredChanged);
     }
 }

@@ -7,6 +7,7 @@ import com.vhcctweaks.handler.ComputerLock;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
 import com.vhcctweaks.link.ComputerIndex;
 import com.vhcctweaks.remote.RemoteControl;
+import com.vhcctweaks.util.Safety;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
@@ -184,7 +185,11 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local level, err = ccvault.getPlayerVaultLevel("SomePlayer")
      */
     @LuaFunction(mainThread = true)
-    public final Object[] getPlayerVaultLevel(String playerName) {
+    public final Object[] getPlayerVaultLevel(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerVaultLevel", () -> vaultLevel(playerName));
+    }
+
+    private Object[] vaultLevel(String playerName) {
         if (playerName == null || playerName.isBlank()) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
         String name = playerName.trim();
         PlayerLookup.Result lookup = resolvePlayer(name);
@@ -200,7 +205,12 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local gear, err = ccvault.getPlayerEquipment("SomePlayer")
      */
     @LuaFunction(mainThread = true)
-    public final Object[] getPlayerEquipment(String playerName) {
+    public final Object[] getPlayerEquipment(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerEquipment", () -> equipment(playerName));
+    }
+
+    /** Needs the player's entity, so only a player on this server counts: one elsewhere on the network is offline here. */
+    private Object[] equipment(String playerName) {
         if (playerName == null || playerName.isBlank()) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
         String name = playerName.trim();
         PlayerLookup.Result lookup = resolvePlayer(name);
@@ -300,14 +310,18 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local id = ccvault.requestAllowance("Steve", 500, 60)
      */
     @LuaFunction(mainThread = true)
-    public final Object[] requestAllowance(String playerName, long maxTokens, int minutes) {
+    public final Object[] requestAllowance(String playerName, long maxTokens, int minutes) throws LuaException {
+        return Safety.lua("ccvault.requestAllowance", () -> askAllowance(playerName, maxTokens, minutes));
+    }
+
+    private Object[] askAllowance(String playerName, long maxTokens, int minutes) {
         if (playerName == null || playerName.isBlank()) return new Object[]{null, "player is required"};
         if (maxTokens <= 0) return new Object[]{null, "maxTokens must be positive"};
         int maxMinutes = ModConfig.CCVAULT_MAX_ALLOWANCE_MINUTES.get();
         if (minutes < 1 || minutes > maxMinutes) return new Object[]{null, "minutes must be between 1 and " + maxMinutes};
 
         ServerPlayer player = onlinePlayer(playerName.trim());
-        if (player == null) return new Object[]{null, "player '" + playerName.trim() + "' is not online"};
+        if (player == null) return new Object[]{null, "player not on this server"};
         UUID owner = ComputerPlacementTracker.getOwner(computerId);
         if (owner == null) return new Object[]{null, OWNER_REGISTRATION_MESSAGE};
 
@@ -323,10 +337,12 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local remaining, secondsLeft = ccvault.getAllowance("Steve")
      */
     @LuaFunction
-    public final Object[] getAllowance(String playerName) {
-        ServerPlayer player = playerName == null ? null : onlinePlayer(playerName.trim());
-        long[] allowance = player == null ? null : AllowanceManager.get(computerId, player.getUUID(), System.currentTimeMillis());
-        return allowance == null ? new Object[]{null} : new Object[]{allowance[0], allowance[1]};
+    public final Object[] getAllowance(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getAllowance", () -> {
+            ServerPlayer player = playerName == null ? null : onlinePlayer(playerName.trim());
+            long[] allowance = player == null ? null : AllowanceManager.get(computerId, player.getUUID(), System.currentTimeMillis());
+            return allowance == null ? new Object[]{null} : new Object[]{allowance[0], allowance[1]};
+        });
     }
 
     /**
@@ -334,9 +350,11 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: ccvault.endAllowance("Steve")
      */
     @LuaFunction
-    public final boolean endAllowance(String playerName) {
-        ServerPlayer player = playerName == null ? null : onlinePlayer(playerName.trim());
-        return player != null && AllowanceManager.end(computerId, player.getUUID());
+    public final Object[] endAllowance(String playerName) throws LuaException {
+        return Safety.lua("ccvault.endAllowance", () -> {
+            ServerPlayer player = playerName == null ? null : onlinePlayer(playerName.trim());
+            return new Object[]{player != null && AllowanceManager.end(computerId, player.getUUID())};
+        });
     }
 
     /** The label players see in an allowance prompt. */
@@ -666,9 +684,9 @@ public class CCVaultAPI implements ILuaAPI {
         return player;
     }
 
+    /** A player on this server, by name. Online somewhere else on the network does not count. */
     private static ServerPlayer onlinePlayer(String name) {
-        var server = ServerLifecycleHooks.getCurrentServer();
-        return server == null ? null : server.getPlayerList().getPlayerByName(name);
+        return Safety.here(ServerLifecycleHooks.getCurrentServer(), name);
     }
 
     /** The host paying a player costs that player nothing, so they only have to have approved this computer: a winner who stepped away still gets paid. */
@@ -722,10 +740,9 @@ public class CCVaultAPI implements ILuaAPI {
         };
     }
 
+    /** A player on this server, by UUID: in its player list, not removed, still connected. */
     private ServerPlayer getServerPlayerByUuid(UUID uuid) {
-        var server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) return null;
-        return server.getPlayerList().getPlayer(uuid);
+        return Safety.here(ServerLifecycleHooks.getCurrentServer(), uuid);
     }
 
     private PlayerLookup.Result resolvePlayer(String playerName) {

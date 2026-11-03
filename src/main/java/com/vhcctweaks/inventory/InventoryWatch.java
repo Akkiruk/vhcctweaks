@@ -1,5 +1,6 @@
 package com.vhcctweaks.inventory;
 
+import com.vhcctweaks.util.Safety;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.NotAttachedException;
@@ -154,7 +155,24 @@ public final class InventoryWatch {
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || PENDING.isEmpty()) return;
-        flush(InventoryWatch::isGoneBlock);
+        Safety.guard("InventoryWatch tick", () -> flush(InventoryWatch::isGoneBlock));
+    }
+
+    /** The hooks on BlockEntity, which run inside every container change in the game: they must never throw. */
+    public static void onChangedSafely(Object block) {
+        try {
+            onChanged(block);
+        } catch (RuntimeException e) {
+            Safety.logOnce("InventoryWatch.onChanged", e);
+        }
+    }
+
+    public static void onRemovedSafely(Object block) {
+        try {
+            onRemoved(block);
+        } catch (RuntimeException e) {
+            Safety.logOnce("InventoryWatch.onRemoved", e);
+        }
     }
 
     static boolean isGoneBlock(Object block) {

@@ -3,6 +3,7 @@ package com.vhcctweaks.ccvault;
 import com.vhcctweaks.VHCCTweaks;
 import com.vhcctweaks.config.ModConfig;
 import com.vhcctweaks.handler.ComputerPlacementTracker;
+import com.vhcctweaks.util.Safety;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.HoverEvent;
@@ -305,7 +306,7 @@ public class SessionAuthManager {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || ++expiryTicks < 10) return;
         expiryTicks = 0;
-        if (!pendingNonces.isEmpty()) cleanupPendingNonces(System.currentTimeMillis());
+        if (!pendingNonces.isEmpty()) Safety.guard("SessionAuthManager tick", () -> cleanupPendingNonces(System.currentTimeMillis()));
     }
 
     private static int expiryTicks;
@@ -320,16 +321,20 @@ public class SessionAuthManager {
 
     /** A request that will never be clicked. Only an allowance request has a computer waiting to hear. */
     private static void expired(PendingAuth pending) {
-        if (pending.request() != Request.ALLOWANCE) return;
-        AllowanceManager.notify(pending.computerId(), pending.ask().requestId(), pending.ask().playerName(), false);
+        if (pending.request() != Request.ALLOWANCE || pending.ask() == null) return;
+        // One computer's event failing must not stop the others being told
+        Safety.guard("allowance answer", () ->
+                AllowanceManager.notify(pending.computerId(), pending.ask().requestId(), pending.ask().playerName(), false));
     }
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.getPlayer() instanceof ServerPlayer player) {
-            clearPlayerSessions(player.getUUID());
-            VHCCTweaks.LOGGER.debug("CCVault: Cleared all auth state for {}", player.getName().getString());
-        }
+        Safety.guard("CCVault logout", () -> {
+            if (event.getPlayer() instanceof ServerPlayer player) {
+                clearPlayerSessions(player.getUUID());
+                VHCCTweaks.LOGGER.debug("CCVault: Cleared all auth state for {}", player.getName().getString());
+            }
+        });
     }
 
     private static String generateNonce() {

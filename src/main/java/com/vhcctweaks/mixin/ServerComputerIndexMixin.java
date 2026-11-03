@@ -2,6 +2,7 @@ package com.vhcctweaks.mixin;
 
 import com.vhcctweaks.link.ComputerIndex;
 import dan200.computercraft.shared.computer.core.ServerComputer;
+import com.vhcctweaks.util.Safety;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,11 +15,13 @@ public abstract class ServerComputerIndexMixin {
 
     @Inject(method = "register", at = @At("RETURN"))
     private void vhcctweaks_indexOnRegister(CallbackInfoReturnable<Integer> cir) {
-        ComputerIndex.onRegistered((ServerComputer) (Object) this);
+        ServerComputer self = (ServerComputer) (Object) this;
+        Safety.guard("computer index register", () -> ComputerIndex.onRegistered(self));
     }
 
     @Inject(method = "unload", at = @At("HEAD"))
     private void vhcctweaks_unindexOnUnload(CallbackInfo ci) {
-        ComputerIndex.onUnloaded((ServerComputer) (Object) this);
+        ServerComputer self = (ServerComputer) (Object) this;
+        Safety.guard("computer index unload", () -> ComputerIndex.onUnloaded(self));
     }
 }

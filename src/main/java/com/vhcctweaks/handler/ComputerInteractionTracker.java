@@ -63,8 +63,13 @@ public class ComputerInteractionTracker {
                 boolean touch = event.getHand() == InteractionHand.MAIN_HAND
                         && !player.isCrouching() && event.getFace() == monitor.getFront();
                 ((TileMonitorAccessor) (Object) monitor).vhcctweaks$eachComputer(computer -> {
-                    recordInteraction(player, computer.getID());
-                    if (touch) computer.queueEvent("vhcc_touch", player.getGameProfile().getName());
+                    // One attachment going away mid-touch (a linked computer unloading) must not cost the others their touch
+                    try {
+                        recordInteraction(player, computer.getID());
+                        if (touch) computer.queueEvent("vhcc_touch", player.getGameProfile().getName());
+                    } catch (RuntimeException e) {
+                        VHCCTweaks.LOGGER.debug("ComputerInteractionTracker: skipped a detached computer: {}", e.getMessage());
+                    }
                 });
             }
         } catch (Exception e) {

@@ -2,6 +2,7 @@ package com.vhcctweaks.inventory;
 
 import com.vhcctweaks.VHCCTweaks;
 import com.vhcctweaks.config.ModConfig;
+import com.vhcctweaks.util.Safety;
 import dan200.computercraft.api.detail.DetailRegistries;
 import dan200.computercraft.api.lua.GenericSource;
 import dan200.computercraft.api.lua.LuaException;
@@ -42,14 +43,16 @@ public final class InventoryExtras implements GenericSource {
 
     /** Every non-empty slot's getItemDetail, in one main-thread call. */
     @LuaFunction(mainThread = true)
-    public static Map<Integer, Map<String, ?>> listDetailed(IItemHandler inventory) {
-        Map<Integer, Map<String, ?>> result = new HashMap<>();
-        int size = inventory.getSlots();
-        for (int i = 0; i < size; i++) {
-            ItemStack stack = inventory.getStackInSlot(i);
-            if (!stack.isEmpty()) result.put(i + 1, DetailRegistries.ITEM_STACK.getDetails(stack));
-        }
-        return result;
+    public static Object[] listDetailed(IItemHandler inventory) throws LuaException {
+        return Safety.lua("inventory.listDetailed", () -> {
+            Map<Integer, Map<String, ?>> result = new HashMap<>();
+            int size = inventory.getSlots();
+            for (int i = 0; i < size; i++) {
+                ItemStack stack = inventory.getStackInSlot(i);
+                if (!stack.isEmpty()) result.put(i + 1, DetailRegistries.ITEM_STACK.getDetails(stack));
+            }
+            return new Object[]{result};
+        });
     }
 
     /**
@@ -58,7 +61,11 @@ public final class InventoryExtras implements GenericSource {
      * Stops early once the batch has used batchTimeBudgetMicros; done says how many moves were attempted.
      */
     @LuaFunction(mainThread = true)
-    public static Map<String, Object> moveMany(IItemHandler from, IComputerAccess computer, Map<?, ?> moves) throws LuaException {
+    public static Object[] moveMany(IItemHandler from, IComputerAccess computer, Map<?, ?> moves) throws LuaException {
+        return Safety.lua("inventory.moveMany", () -> new Object[]{runMoves(from, computer, moves)});
+    }
+
+    private static Map<String, Object> runMoves(IItemHandler from, IComputerAccess computer, Map<?, ?> moves) throws LuaException {
         long start = System.nanoTime();
         List<MoveBatch.Move> batch = MoveBatch.parse(moves, ModConfig.INVENTORY_MAX_BATCH_MOVES.get());
 
@@ -82,14 +89,20 @@ public final class InventoryExtras implements GenericSource {
 
     /** Send this computer inventory_changed for this inventory, under the name it uses for it. */
     @LuaFunction(mainThread = true)
-    public static void watch(IItemHandler inventory, IComputerAccess computer) throws LuaException {
-        InventoryWatch.watch(blockOf(computer), computer, computer.getID(),
-                ModConfig.INVENTORY_MAX_WATCHES_PER_COMPUTER.get(), InventoryWatch::isGoneBlock);
+    public static Object[] watch(IItemHandler inventory, IComputerAccess computer) throws LuaException {
+        return Safety.lua("inventory.watch", () -> {
+            InventoryWatch.watch(blockOf(computer), computer, computer.getID(),
+                    ModConfig.INVENTORY_MAX_WATCHES_PER_COMPUTER.get(), InventoryWatch::isGoneBlock);
+            return new Object[0];
+        });
     }
 
     @LuaFunction(mainThread = true)
-    public static void unwatch(IItemHandler inventory, IComputerAccess computer) throws LuaException {
-        InventoryWatch.unwatch(blockOf(computer), computer);
+    public static Object[] unwatch(IItemHandler inventory, IComputerAccess computer) throws LuaException {
+        return Safety.lua("inventory.unwatch", () -> {
+            InventoryWatch.unwatch(blockOf(computer), computer);
+            return new Object[0];
+        });
     }
 
     /** The block behind the peripheral being called: each computer access can find its own peripheral by its own name. */

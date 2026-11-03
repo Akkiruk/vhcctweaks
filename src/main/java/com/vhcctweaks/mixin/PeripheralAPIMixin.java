@@ -9,6 +9,7 @@ import dan200.computercraft.core.asm.PeripheralMethod;
 import dan200.computercraft.core.computer.ComputerSide;
 import dan200.computercraft.shared.peripheral.modem.wireless.WirelessModemPeripheral;
 import org.spongepowered.asm.mixin.Final;
+import com.vhcctweaks.util.Safety;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -32,12 +33,12 @@ public abstract class PeripheralAPIMixin {
     @Inject(method = "getMethods(Ldan200/computercraft/api/peripheral/IPeripheral;)Ljava/util/Map;", at = @At("RETURN"))
     private static void vhcctweaks_addHubMethods(IPeripheral peripheral, CallbackInfoReturnable<Map<String, PeripheralMethod>> cir) {
         if (peripheral instanceof WirelessModemPeripheral modem && modem.isInterdimensional()) {
-            HubMethods.addTo(cir.getReturnValue());
+            Safety.guard("ender modem methods", () -> HubMethods.addTo(cir.getReturnValue()));
         }
     }
 
     @Inject(method = "onPeripheralChanged", at = @At("TAIL"))
     private void vhcctweaks_sidesChanged(ComputerSide side, IPeripheral peripheral, CallbackInfo ci) {
-        LinkManager.onSidesChanged(environment.getComputerID());
+        Safety.guard("linked sides changed", () -> LinkManager.onSidesChanged(environment.getComputerID()));
     }
 }

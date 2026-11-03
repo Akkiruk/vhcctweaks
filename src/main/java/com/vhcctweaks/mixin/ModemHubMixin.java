@@ -3,6 +3,7 @@ package com.vhcctweaks.mixin;
 import com.vhcctweaks.link.LinkManager;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.shared.peripheral.modem.ModemPeripheral;
+import com.vhcctweaks.util.Safety;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,6 +15,6 @@ public abstract class ModemHubMixin {
 
     @Inject(method = "detach", at = @At("HEAD"))
     private void vhcctweaks_endLinks(IComputerAccess computer, CallbackInfo ci) {
-        LinkManager.onHubDetached(computer);
+        Safety.guard("ender modem detach", () -> LinkManager.onHubDetached(computer));
     }
 }

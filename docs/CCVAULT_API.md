@@ -5,6 +5,16 @@
 
 ---
 
+## New in 2.2.36
+
+The whole contract is in `docs/SPEC_2_2_36.md`. For money calls:
+
+- `ccvault.transfer`, and `ccvault.getBalance` or `ccvault.getPlayerBalance` for a player who is not on this server, run their database part on one economy thread, in the order they were made, and **yield** until it answers. The answer arrives as the event `vhcc_economy` with `(ticket, results...)`; the call takes its own ticket's event and returns the results. Other coroutines (for example in `parallel`) get their events as usual while it waits; the waiting coroutine itself sees no other events, exactly as during `getItemDetail`.
+- `terminate` while waiting raises `Terminated` in the caller. A transfer that had started still completes, and an allowance it drew on is charged.
+- A database that does not answer within 20 seconds gives `nil, "economy timed out - the transfer may still complete, check verifyTransaction"`.
+- Checks and refusals (`not authenticated`, `amount must be positive`, a missing touch, and the like) still answer at once without yielding.
+- `ccvault.transfer("host", "player:Name", ...)` needs no fresh touch from that player. Spending allowances: `requestAllowance`, `getAllowance`, `endAllowance`. A player's level: `getPlayerVaultLevel`. What they wear: `getPlayerEquipment`.
+
 ## New in 2.2.24
 
 - `vhcc_touch` event: `local _, playerName = os.pullEvent("vhcc_touch")`. It arrives immediately before the `monitor_touch` from that player's touch on an adjacent monitor.

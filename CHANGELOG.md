@@ -54,6 +54,7 @@ These change what `getItemDetail` gives for Vault items, so check scripts that r
 - Two computers with the same ID no longer confuse links and allowance answers when one of them unloads.
 - `/vhcc pc` replies too big for one chat line come back as an error instead of kicking you. `serverlog` and `ledger` no longer read big files on the server thread.
 - Server start doesn't open every player's ledger file anymore.
+- Money calls that go to the database don't hold up every other computer anymore. `transfer`, and `getBalance` or `getPlayerBalance` for someone who isn't on this server, now wait for their answer the way `getItemDetail` does. Other coroutines keep getting their events meanwhile. If the database doesn't answer within 20 seconds you get `nil` and "economy timed out" instead of a frozen computer, and the transfer may still go through (check `verifyTransaction`). Terminating a program mid-transfer stops the wait, not the transfer.
 
 ## [2.2.35] - 2026-10-31
 

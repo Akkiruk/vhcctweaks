@@ -26,6 +26,7 @@ Bigger one. Computers can finally reach each other's stuff without running cable
 - `ccvault.requestAllowance(player, maxTokens, minutes)` asks a player once in chat. If they approve, this computer can charge them up to that much with no fresh touch until it runs out, runs out of time, they leave, or they `/ccvault revoke`. The answer comes back as `ccvault_allowance`. There's also `getAllowance` and `endAllowance`.
 - `/ccvault revoke` with no number revokes everything you've approved.
 - `ccvault.getPlayerVaultLevel(player)` gives a player's Vault Hunters level by name or UUID, even when they're offline. No approval needed.
+- `ccvault.getPlayerEquipment(player)` shows what an online player is wearing and holding, Curios slots too, with the same item details `getItemDetail` gives.
 - The host paying a player with `transfer("host", "player:Name", ...)` no longer needs that player to have touched the computer recently, so a winner who walked off still gets paid. Charging a player still needs the touch.
 - `interactionStaleSeconds` can go up to an hour now (was 5 minutes).
 

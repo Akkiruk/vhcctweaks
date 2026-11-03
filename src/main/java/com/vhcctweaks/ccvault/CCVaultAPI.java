@@ -193,6 +193,26 @@ public class CCVaultAPI implements ILuaAPI {
         return VaultLevelReply.answer(lookup.status(), name, level);
     }
 
+    /**
+     * What an online player is wearing and holding, with getItemDetail's data for each item, Curios slots included.
+     * Read-only, no auth, touch or range. Returns the table, or nil and "unknown player" or "player offline".
+     *
+     * Lua: local gear, err = ccvault.getPlayerEquipment("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerEquipment(String playerName) {
+        if (playerName == null || playerName.isBlank()) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
+        String name = playerName.trim();
+        PlayerLookup.Result lookup = resolvePlayer(name);
+        if (lookup.status() == PlayerLookup.Status.PENDING) {
+            return new Object[]{null, "looking up player '" + name + "' - try again"};
+        }
+        if (lookup.status() == PlayerLookup.Status.UNKNOWN) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
+        ServerPlayer player = getServerPlayerByUuid(lookup.uuid());
+        if (player == null) return new Object[]{null, "player offline"};
+        return new Object[]{PlayerEquipment.read(player)};
+    }
+
     // ===== Transfer =====
 
     /**

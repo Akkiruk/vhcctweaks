@@ -9,9 +9,11 @@ import com.vhcctweaks.link.ComputerIndex;
 import com.vhcctweaks.remote.RemoteControl;
 import com.vhcctweaks.util.Safety;
 import dan200.computercraft.shared.computer.core.ServerComputer;
+import dan200.computercraft.api.lua.IComputerSystem;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
+import dan200.computercraft.api.lua.MethodResult;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
@@ -22,7 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
+import java.util.Arrays;
 
 /**
  * CCVault Lua API exposed as "ccvault" to all CC:Tweaked computers.
@@ -63,9 +67,67 @@ public class CCVaultAPI implements ILuaAPI {
             }));
 
     private final int computerId;
+    /** Null in tests: money calls then run where they are made. */
+    private final IComputerSystem system;
 
-    public CCVaultAPI(int computerId) {
+    public CCVaultAPI(IComputerSystem system) {
+        this.computerId = system.getID();
+        this.system = system;
+    }
+
+    CCVaultAPI(int computerId) {
         this.computerId = computerId;
+        this.system = null;
+    }
+
+    // ===== Money calls that reach the database =====
+
+    /** The event a money call's answer arrives as: (ticket, results...). The waiting call takes it and returns. */
+    public static final String ECONOMY_EVENT = "vhcc_economy";
+
+    /**
+     * Runs job on the economy thread and waits for its answer the way a mainThread call waits: the calling coroutine
+     * yields until its ticket's ccvault event comes back. Checks and authorization happen before this, here on the
+     * computer thread; only the part that talks to the database moves.
+     */
+    private MethodResult economy(String where, Callable<Object[]> job) throws LuaException {
+        if (system == null) {
+            try {
+                return MethodResult.of(job.call());
+            } catch (LuaException e) {
+                throw e;
+            } catch (Exception e) {
+                Safety.logOnce(where, e);
+                return MethodResult.of(null, Safety.INTERNAL_ERROR);
+            }
+        }
+        long ticket = EconomyExecutor.submit(where, job, event -> system.queueEvent(ECONOMY_EVENT, event));
+        if (ticket < 0) return MethodResult.of(null, EconomyExecutor.UNAVAILABLE);
+        return waitFor(ticket);
+    }
+
+    private static MethodResult waitFor(long ticket) {
+        return MethodResult.pullEvent(ECONOMY_EVENT, args ->
+                args.length > 1 && args[1] instanceof Number n && n.longValue() == ticket
+                        ? MethodResult.of(Arrays.copyOfRange(args, 2, args.length))
+                        : waitFor(ticket));
+    }
+
+    /** A balance needs the database unless ParadiseCore has the player cached, which it does for players on this server. */
+    private MethodResult balanceOf(String where, UUID uuid) throws LuaException {
+        Callable<Object[]> read = () -> {
+            long balance = EconomyBridge.getBalance(uuid);
+            return balance < 0 ? new Object[]{null, "could not read balance"} : new Object[]{balance};
+        };
+        if (Safety.here(ServerLifecycleHooks.getCurrentServer(), uuid) != null) {
+            try {
+                return MethodResult.of(read.call());
+            } catch (Exception e) {
+                Safety.logOnce(where, e);
+                return MethodResult.of(null, Safety.INTERNAL_ERROR);
+            }
+        }
+        return economy(where, read);
     }
 
     @Override
@@ -139,14 +201,11 @@ public class CCVaultAPI implements ILuaAPI {
      *      local bal, err = ccvault.getBalance("host")
      */
     @LuaFunction
-    public final Object[] getBalance(String target) throws LuaException {
+    public final MethodResult getBalance(String target) throws LuaException {
         authorize(target);
         UUID uuid = resolveTarget(target);
-        long balance = EconomyBridge.getBalance(uuid);
-        if (balance < 0) {
-            return new Object[]{null, "could not read balance"};
-        }
-        return new Object[]{balance};
+        // A host who is not on this server is a database read: that one waits on the economy thread
+        return balanceOf("ccvault.getBalance", uuid);
     }
 
     /**
@@ -157,25 +216,22 @@ public class CCVaultAPI implements ILuaAPI {
      * Lua: local bal, err = ccvault.getPlayerBalance("SomePlayer")
      */
     @LuaFunction
-    public final Object[] getPlayerBalance(String playerName) {
+    public final MethodResult getPlayerBalance(String playerName) throws LuaException {
         if (playerName == null || playerName.isBlank()) {
-            return new Object[]{null, "playerName is required"};
+            return MethodResult.of(null, "playerName is required");
         }
 
         String normalizedPlayerName = playerName.trim();
         PlayerLookup.Result lookup = resolvePlayer(normalizedPlayerName);
         if (lookup.status() == PlayerLookup.Status.PENDING) {
-            return new Object[]{null, "looking up player '" + normalizedPlayerName + "' - try again"};
+            return MethodResult.of(null, "looking up player '" + normalizedPlayerName + "' - try again");
         }
         if (lookup.status() == PlayerLookup.Status.UNKNOWN) {
-            return new Object[]{null, "unknown player or UUID '" + normalizedPlayerName + "'"};
+            return MethodResult.of(null, "unknown player or UUID '" + normalizedPlayerName + "'");
         }
 
-        long balance = EconomyBridge.getBalance(lookup.uuid());
-        if (balance < 0) {
-            return new Object[]{null, "could not read balance"};
-        }
-        return new Object[]{balance};
+        // Anyone not on this server is a database read: that one waits on the economy thread
+        return balanceOf("ccvault.getPlayerBalance", lookup.uuid());
     }
 
     /**
@@ -240,23 +296,23 @@ public class CCVaultAPI implements ILuaAPI {
      * @param reason description string (max 64 chars, logged)
      */
     @LuaFunction
-    public final Object[] transfer(String from, String to, long amount, String reason) throws LuaException {
+    public final MethodResult transfer(String from, String to, long amount, String reason) throws LuaException {
         if (from == null || to == null) {
-            return new Object[]{null, "from and to are required"};
+            return MethodResult.of(null, "from and to are required");
         }
         authorize(from, to);
 
         if (from.equals(to)) {
-            return new Object[]{null, "cannot transfer to self"};
+            return MethodResult.of(null, "cannot transfer to self");
         }
         if (amount <= 0) {
-            return new Object[]{null, "amount must be positive"};
+            return MethodResult.of(null, "amount must be positive");
         }
         if (reason == null || reason.isBlank()) {
-            return new Object[]{null, "reason is required"};
+            return MethodResult.of(null, "reason is required");
         }
         if (reason.length() > MAX_REASON_LENGTH) {
-            return new Object[]{null, "reason too long (max " + MAX_REASON_LENGTH + " chars)"};
+            return MethodResult.of(null, "reason too long (max " + MAX_REASON_LENGTH + " chars)");
         }
 
         // The host paying a named player costs that player nothing, so it needs no fresh touch from them
@@ -269,7 +325,7 @@ public class CCVaultAPI implements ILuaAPI {
 
         if (fromUuid.equals(toUuid)) {
             if (allowancePlayer != null) AllowanceManager.settle(computerId, allowancePlayer, amount, false);
-            return new Object[]{null, "cannot transfer to yourself — player and host are the same account"};
+            return MethodResult.of(null, "cannot transfer to yourself — player and host are the same account");
         }
 
         UUID playerUuid = isNamed(from) ? fromUuid : isNamed(to) ? toUuid : getInteractingPlayerOrThrow().getUUID();
@@ -277,27 +333,29 @@ public class CCVaultAPI implements ILuaAPI {
 
         if (RemoteControl.blocksTransfer(computerId, playerUuid)) {
             if (allowancePlayer != null) AllowanceManager.settle(computerId, allowancePlayer, amount, false);
-            return new Object[]{null, "this computer was remotely controlled - reboot it before moving tokens"};
+            return MethodResult.of(null, "this computer was remotely controlled - reboot it before moving tokens");
         }
 
-        TransferService.TransferResult result;
-        boolean charged = false;
-        try {
-            result = TransferService.execute(fromUuid, toUuid, amount, reason, computerId, playerUuid, hostUuid);
-            charged = result.success();
-        } finally {
-            // A refused or crashed transfer gives the reserved amount back; a used-up allowance ends
-            if (allowancePlayer != null) AllowanceManager.settle(computerId, allowancePlayer, amount, charged);
-        }
-
-        if (result.success()) {
+        // Everything above was checking, on the computer thread. Moving the money is a database transaction, so it
+        // runs on the economy thread, in order, while this call waits. The allowance is settled there too, by what
+        // the money actually did, so it stays right even if the waiting program is terminated or the wait times out.
+        UUID payer = fromUuid, payee = toUuid, player = playerUuid, host = hostUuid, allowance = allowancePlayer;
+        return economy("ccvault.transfer", () -> {
+            TransferService.TransferResult result;
+            boolean charged = false;
+            try {
+                result = TransferService.execute(payer, payee, amount, reason, computerId, player, host);
+                charged = result.success();
+            } finally {
+                // A refused or crashed transfer gives the reserved amount back; a used-up allowance ends
+                if (allowance != null) AllowanceManager.settle(computerId, allowance, amount, charged);
+            }
+            if (!result.success()) return new Object[]{null, result.error()};
             Map<String, Object> response = new HashMap<>();
             response.put("txId", result.txId());
             response.put("success", true);
             return new Object[]{response};
-        } else {
-            return new Object[]{null, result.error()};
-        }
+        });
     }
 
     // ===== Spending allowance =====

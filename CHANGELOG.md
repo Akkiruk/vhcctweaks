@@ -47,6 +47,13 @@ These change what `getItemDetail` gives for Vault items, so check scripts that r
 - `vhcc.write` and `append` don't walk the computer's whole folder on every call anymore. On a full folder that could hold up every computer on the server for a quarter of a second.
 - `getTransactionHistory` and `verifyTransaction` read the ledger from the end, so a long history doesn't slow them down.
 - A half-finished `/vhcc pc` upload is dropped when the player leaves.
+- `getPlayerVaultLevel` for someone who isn't on the server reads their saved file in one go and remembers it until the file changes. It used to cost several milliseconds of server tick per call.
+- If the "+N tokens" chat message ever fails, the transfer still counts as done. Before, a script could be told a finished transfer failed and charge again.
+- Big bursts of events are spread over ticks so a computer's event queue can't overflow: `/vhcc pc type` sends 32 characters a tick, a link sends at most 64 `peripheral` or `peripheral_detach` events a tick, and a computer gets at most 32 `inventory_changed` a tick (the rest follow next tick).
+- Changes to `vhcc_lockdown.txt` apply after a reboot. Before, they waited until the chunk unloaded.
+- Two computers with the same ID no longer confuse links and allowance answers when one of them unloads.
+- `/vhcc pc` replies too big for one chat line come back as an error instead of kicking you. `serverlog` and `ledger` no longer read big files on the server thread.
+- Server start doesn't open every player's ledger file anymore.
 
 ## [2.2.35] - 2026-10-31
 

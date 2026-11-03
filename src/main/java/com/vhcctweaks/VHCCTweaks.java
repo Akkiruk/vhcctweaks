@@ -74,7 +74,7 @@ public class VHCCTweaks {
 
         // Register custom Lua APIs for CC:Tweaked computers
         ComputerCraftAPI.registerAPIFactory(computer -> new VHCCTweaksAPI(computer.getID()));
-        ComputerCraftAPI.registerAPIFactory(computer -> new CCVaultAPI(computer.getID()));
+        ComputerCraftAPI.registerAPIFactory(CCVaultAPI::new);
 
         // Vault item detail provider — enriches getItemDetail() with VH item data
         DetailRegistries.ITEM_STACK.addProvider(new VaultItemDetailProvider());
@@ -90,8 +90,15 @@ public class VHCCTweaks {
     }
 
     /** Computer IDs belong to a world, so everything keyed by them is stored with it and loaded fresh for it. */
+    /** Money calls still queued get a few seconds to finish, then the economy threads stop. */
+    @SubscribeEvent
+    public static void onServerStopped(net.minecraftforge.event.server.ServerStoppedEvent event) {
+        com.vhcctweaks.util.Safety.guard("economy shutdown", com.vhcctweaks.ccvault.EconomyExecutor::stop);
+    }
+
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+        com.vhcctweaks.ccvault.EconomyExecutor.start();
         Path dataDir = event.getServer().getWorldPath(LevelResource.ROOT).resolve("vhcc_data").toAbsolutePath().normalize();
         adoptInstanceData(FMLPaths.GAMEDIR.get().resolve("vhcc_data").toAbsolutePath().normalize(), dataDir);
 

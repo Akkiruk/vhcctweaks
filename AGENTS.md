@@ -25,7 +25,9 @@
 - Use `scripts/build-and-deploy-vhcctweaks.ps1` only for intermediate local validation before the final release step.
 - That helper forces a Java 17 toolchain locally, builds with `gradlew.bat build`, copies the latest `vhcctweaks-*.jar` into the runtime `mods/` folder, and copies `scripts/*.zs` into the runtime `scripts/` folder.
 - Build output lives at `build/libs/vhcctweaks-<mod_version>.jar`.
-- After any change in this repo that should be kept, always finish by running `.vscode/release.ps1` so the change is built, deployed, committed, tagged, pushed, and published as the next GitHub release.
+- **The version is frozen at 2.2.36** (owner's decision): every version bump makes every client update its jar. Do
+  not release 2.2.37 or bump `mod_version` without the owner asking for it; collect mod changes and ask first.
+- When the owner has asked for a release: after any change in this repo that should be kept, finish by running `.vscode/release.ps1` so the change is built, deployed, committed, tagged, pushed, and published as the next GitHub release.
 - Use `.vscode/release.ps1` for the formal tagged release flow. It freezes `CHANGELOG.md`'s `[Unreleased]` notes into the next versioned section, updates README version references, pushes the tag, and creates or updates the GitHub release.
 - Do not describe a change as "released" unless `.vscode/release.ps1` completed successfully.
 - `scripts/build-and-deploy-vhcctweaks.ps1` and `scripts/push-all.ps1` are not release workflows. They produce deployed or pushed changes only.

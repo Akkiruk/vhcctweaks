@@ -76,6 +76,10 @@ public final class VaultModifierHelper {
         Object value = modifier.getValue();
         map.put("name", name);
 
+        // The attribute's registry id: a key that does not change with the display name
+        ResourceLocation attributeId = modifier.getAttribute().getRegistryName();
+        if (attributeId != null) map.put("attribute", attributeId.toString());
+
         // Categories (legendary, crafted, frozen, etc.)
         AffixCategorySet cats = modifier.getCategories();
         addCategoryFlags(map, cats);
@@ -219,10 +223,7 @@ public final class VaultModifierHelper {
             sub.put("amount", abilityFloat.getAmount());
             map.put("value", sub);
         } else if (value instanceof Pair<?,?> pair) {
-            Map<String, Object> sub = new LinkedHashMap<>();
-            sub.put("first", pair.getFirst());
-            sub.put("second", pair.getSecond());
-            map.put("value", sub);
+            map.put("value", PairLabels.pair(attributeOf(map), pair.getFirst(), pair.getSecond()));
         } else {
             putSimpleValue(map, value);
         }
@@ -336,15 +337,16 @@ public final class VaultModifierHelper {
         } else if (value instanceof EffectTrialAttribute trial) {
             map.put("value", trial.toString());
         } else if (value instanceof Pair<?,?> pair) {
-            // ON_KILL_HEAL, BLOCK_HEAL_ON_SUCCESS: Pair<Float, Float>
-            Map<String, Object> sub = new LinkedHashMap<>();
-            sub.put("first", pair.getFirst());
-            sub.put("second", pair.getSecond());
-            map.put("value", sub);
+            // ON_KILL_HEAL, BLOCK_HEAL_ON_SUCCESS: Pair<Float, Float>, chance then amount
+            map.put("value", PairLabels.pair(attributeOf(map), pair.getFirst(), pair.getSecond()));
         } else {
             // Last resort: string representation
             map.put("value", value.toString());
         }
+    }
+
+    private static String attributeOf(Map<String, Object> map) {
+        return map.get("attribute") instanceof String id ? id : null;
     }
 
     private static void putSimpleValue(Map<String, Object> map, Object value) {

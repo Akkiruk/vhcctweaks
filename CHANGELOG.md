@@ -4,7 +4,36 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temper and Dust. Computers can read all of it now. Needs 3.21.74 on the server. On an older Vault Hunters the new stuff just isn't there, nothing breaks.
+
+### Players
+
+- `ccvault.getPlayerGearPower(player)` gives Gear Score, Gear Power, the Might/Magic/Vigor multipliers, the score of each of the six slots and the highest Gear Power they ever had. It also says which hotbar weapon is the one that counts, and why a slot scores 0 (empty, broken, greed tier too low).
+- Offline players only get the peak, because that's all Vault Hunters saves. The table says `online = false`.
+- `ccvault.getPlayerTemper(player)` gives Dust, and the level and multiplier for Might, Magic, Vigor and Tool. Works offline too.
+- `ccvault.getPlayerReputation(player)` gives reputation with Velara, Tenos, Wendarr and Idona. Online players only.
+- Levels go past 100 now. `getPlayerVaultLevel` already returned the real number, so nothing to change there. Gear still stops at 100.
+- Same rule as before for networks: somebody on another server isn't online here, they're read from what this server has saved.
+
+### Vault item details
+
+- Every identified piece of gear has its own `gearScore`, worked out by the game's own scorer. Around 1000 is a perfect OMEGA piece, legendary rolls can go over. `gearScoreStatus` says if it counts at all, a broken piece is `INERT`.
+- Each modifier on that piece has `scoreRatio` and `scorePoints`, so you can see which roll is carrying it. Number rolls also get `naturalBest` and `naturalWorst`.
+- `isLegendary` shows up on unidentified gear that's flagged legendary. On identified gear it's also true when a modifier is legendary, which the old flag missed for pieces that rolled one by luck.
+- `greedTier` on gear an Etching locked to a greed tier. It used to be a nameless entry in `attributes`.
+- Heal on Kill and Heal on Block say which number is which: `chance` and `amount`. `first` and `second` are still there.
+- `durability.max`, same number as `durability.total`.
+- Modifiers have `attribute`, the registry id like `the_vault:summon_damage`. Use that as a key, the display name can change.
+- Jewels have `size`, `state` and `identified`. Tools have `capacity`, `hammerSize`, `material`, `state`, `identified`, `isSoulbound` and `craftingPotential`. Before this a sorter had to dig the jewel size out of the modifier list, and tools and jewels never said if they were identified.
+- Don't want the score work on every item read? `vaultDetails.gearScore` and `vaultDetails.gearScoreLines` in the server config turn it off.
+
+### Small stuff
+
+- `ccvault.getLimits()` returns the server's limits (max transfer, touch window, batch size, watch limit and so on). No more learning them from error messages.
+- `vhcc.getUsage()` returns how many bytes the computer's folder uses and how many it's allowed.
+- A `moveMany` move can carry `expectName = "mod:item"`. If something else is in that slot by the time the move runs, it moves nothing and carries on with the rest.
+
+Full details are in `docs/SPEC_2_2_37.md`.
 
 ## [2.2.36] - 2026-11-03
 

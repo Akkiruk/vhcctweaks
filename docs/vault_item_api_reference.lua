@@ -12,6 +12,11 @@
 
 ---@class VaultModifier
 ---@field name string Human-readable modifier name
+---@field attribute? string The attribute's registry id, e.g. "the_vault:summon_damage" (2.2.37)
+---@field scoreRatio? number Gear Score ratio of this line: 1 is the best natural roll at level 100, up to 1.5 (2.2.37)
+---@field scorePoints? number This line's share of the piece's gearScore (2.2.37)
+---@field naturalBest? number Best natural roll at level 100 for this gear type (2.2.37)
+---@field naturalWorst? number Worst natural roll at level 100 for this gear type (2.2.37)
 ---@field value number|boolean|string|table The rolled value
 ---@field tier? number Rolled tier (1-indexed), absent for deterministic modifiers
 ---@field min? number Minimum possible value at this tier
@@ -35,8 +40,19 @@
 ---@field total number Total repair slots
 ---@field used number Used repair slots
 
+---@class HealPair Heal on Kill / Heal on Block value (2.2.37 adds chance and amount)
+---@field first number
+---@field second number
+---@field chance number The same number as first
+---@field amount number The same number as second
+
+---@class GearScoreLines
+---@field expected number Line count of a best natural piece of this type
+---@field actual number This piece's line count
+
 ---@class Durability
 ---@field total number Max durability
+---@field max number The same number as total (2.2.37)
 ---@field current number Current durability
 
 ---@class CraftingPotential
@@ -57,7 +73,12 @@
 ---@field craftingPotential? CraftingPotential Absent on UNIQUE rarity
 ---@field prefixSlots? number Max prefix modifier slots
 ---@field suffixSlots? number Max suffix modifier slots
----@field isLegendary? boolean Only present if true
+---@field isLegendary? boolean Only present if true: flagged (also before identification) or a modifier is legendary
+---@field greedTier? number Greed tier an Etching locked the piece to (2.2.37)
+---@field gearScoreStatus? string COUNTED|INERT|NO_TIER_CONFIG|NOT_COMBAT_GEAR (2.2.37, Vault Hunters 3.21.74)
+---@field gearScore? number 0 to 1500, only when gearScoreStatus is COUNTED (2.2.37)
+---@field gearScoreExact? number gearScore before rounding (2.2.37)
+---@field gearScoreLines? GearScoreLines (2.2.37)
 ---@field isSoulbound? boolean Only present if true
 ---@field uniqueKey? string Only on UNIQUE items
 ---@field gearName? string Custom name if set
@@ -74,6 +95,14 @@
 ---@field rarity string
 ---@field repairSlots RepairSlots
 ---@field durability Durability
+---@field state string UNIDENTIFIED|ROLLING|IDENTIFIED (2.2.37)
+---@field identified boolean (2.2.37)
+---@field capacity? number Jewel capacity left (2.2.37)
+---@field hammerSize? number (2.2.37)
+---@field material? string Tool material, e.g. CHROMATIC_STEEL_INGOT (2.2.37)
+---@field isLegendary? boolean Only present if true (2.2.37)
+---@field isSoulbound? boolean Only present if true (2.2.37)
+---@field craftingPotential? CraftingPotential (2.2.37)
 ---@field implicits VaultModifier[]
 ---@field prefixes VaultModifier[]
 ---@field suffixes VaultModifier[]
@@ -83,6 +112,10 @@
 ---@field name string
 ---@field level number
 ---@field rarity string
+---@field state string UNIDENTIFIED|ROLLING|IDENTIFIED (2.2.37)
+---@field identified boolean (2.2.37)
+---@field size? number Jewel size (2.2.37)
+---@field isLegendary? boolean Only present if true (2.2.37)
 ---@field implicits VaultModifier[]
 ---@field prefixes VaultModifier[]
 ---@field suffixes VaultModifier[]

@@ -83,8 +83,16 @@ public final class InventoryExtras implements GenericSource {
             assertBetween(move.fromSlot(), 1, from.getSlots(), "From slot out of range (%s)");
             if (move.toSlot() != null) assertBetween(move.toSlot(), 1, to.getSlots(), "To slot out of range (%s)");
             if (limit <= 0) return 0;
+            if (move.expectName() != null && !move.accepts(nameOf(from.getStackInSlot(move.fromSlot() - 1)))) return 0;
             return moveItem(from, move.fromSlot() - 1, to, move.toSlot() == null ? -1 : move.toSlot() - 1, limit);
         }).toLua();
+    }
+
+    /** The registry name getItemDetail reports as name, or null for an empty slot. */
+    private static String nameOf(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        ResourceLocation id = stack.getItem().getRegistryName();
+        return id == null ? null : id.toString();
     }
 
     /** Send this computer inventory_changed for this inventory, under the name it uses for it. */

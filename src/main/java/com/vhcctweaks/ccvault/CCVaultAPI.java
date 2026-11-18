@@ -279,6 +279,79 @@ public class CCVaultAPI implements ILuaAPI {
         return new Object[]{PlayerEquipment.read(player)};
     }
 
+    /**
+     * A player's Gear Score and Gear Power (Vault Hunters 3.21.74): the score, the power, the Temper multipliers
+     * behind it, the six slot scores with which weapon counts, and the highest Gear Power they ever reached.
+     * A player who is not on this server gets what is saved, which is the peak, with online = false.
+     * Read-only, no auth. Returns the table, or nil and "unknown player", "no vault data" or "gear power not available".
+     *
+     * Lua: local power, err = ccvault.getPlayerGearPower("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerGearPower(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerGearPower", () -> playerRead(playerName, VaultPlayers::gearPower));
+    }
+
+    /**
+     * A player's Temper (Vault Hunters 3.21.74): Dust, and the level and multiplier of Might, Magic, Vigor and Tool.
+     * Works for a player who is not on this server, from what is saved. Read-only, no auth.
+     * Returns the table, or nil and "unknown player", "no vault data" or "temper not available".
+     *
+     * Lua: local temper, err = ccvault.getPlayerTemper("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerTemper(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerTemper", () -> playerRead(playerName, VaultPlayers::temper));
+    }
+
+    /**
+     * An online player's reputation with each vault god: { velara =, tenos =, wendarr =, idona = }.
+     * Read-only, no auth. Returns the table, or nil and "unknown player", "player offline" or "reputation not available".
+     *
+     * Lua: local rep, err = ccvault.getPlayerReputation("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerReputation(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerReputation", () -> playerRead(playerName, VaultPlayers::reputation));
+    }
+
+    /** Resolves the name like getPlayerBalance, then reads on this server only. */
+    private Object[] playerRead(String playerName, java.util.function.BiFunction<net.minecraft.server.MinecraftServer, UUID, Object[]> read) {
+        if (playerName == null || playerName.isBlank()) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
+        String name = playerName.trim();
+        PlayerLookup.Result lookup = resolvePlayer(name);
+        if (lookup.status() == PlayerLookup.Status.PENDING) {
+            return new Object[]{null, "looking up player '" + name + "' - try again"};
+        }
+        var server = ServerLifecycleHooks.getCurrentServer();
+        if (lookup.status() == PlayerLookup.Status.UNKNOWN || server == null) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
+        return read.apply(server, lookup.uuid());
+    }
+
+    /**
+     * The server's limits, so a program does not have to guess them or learn them from error messages.
+     *
+     * Lua: local limits = ccvault.getLimits()  -- limits.maxTransferAmount, limits.maxBatchMoves, ...
+     */
+    @LuaFunction
+    public final Object[] getLimits() throws LuaException {
+        return Safety.lua("ccvault.getLimits", () -> new Object[]{new LimitsShape()
+                .put("maxTransferAmount", ModConfig.CCVAULT_MAX_TRANSFER_AMOUNT::get)
+                .put("interactionStaleSeconds", ModConfig.CCVAULT_INTERACTION_STALE_SECONDS::get)
+                .put("nonceExpirySeconds", ModConfig.CCVAULT_NONCE_EXPIRY_SECONDS::get)
+                .put("authIdleTimeoutMinutes", ModConfig.CCVAULT_AUTH_IDLE_TIMEOUT_MINUTES::get)
+                .put("maxHistoryResults", ModConfig.CCVAULT_MAX_HISTORY_RESULTS::get)
+                .put("maxAllowanceMinutes", ModConfig.CCVAULT_MAX_ALLOWANCE_MINUTES::get)
+                .put("maxLinksPerComputer", ModConfig.LINKS_MAX_PER_COMPUTER::get)
+                .put("maxBatchMoves", ModConfig.INVENTORY_MAX_BATCH_MOVES::get)
+                .put("batchTimeBudgetMicros", ModConfig.INVENTORY_BATCH_TIME_BUDGET_MICROS::get)
+                .put("maxWatchesPerComputer", ModConfig.INVENTORY_MAX_WATCHES_PER_COMPUTER::get)
+                .put("vhccMaxBytesPerComputer", ModConfig.VHCC_MAX_BYTES_PER_COMPUTER::get)
+                .put("gearScoreInDetails", ModConfig.DETAILS_GEAR_SCORE::get)
+                .put("gearScoreLinesInDetails", ModConfig.DETAILS_GEAR_SCORE_LINES::get)
+                .build()});
+    }
+
     // ===== Transfer =====
 
     /**

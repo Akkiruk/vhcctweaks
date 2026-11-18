@@ -68,17 +68,28 @@ public final class VaultLevels {
         }
     }
 
-    /** A file's level, remembered with the file's modified time and size so an unchanged file is not read again. */
-    private record Saved(long modified, long size, Integer level) {}
+    /** What this mod reads from a saved profile. Either part is null when the file does not have it. */
+    record SavedProfile(Integer level, SavedTemper temper) {}
+
+    /** A file's contents, remembered with the file's modified time and size so an unchanged file is not read again. */
+    private record Saved(long modified, long size, SavedProfile profile) {}
 
     private static final Map<Path, Saved> SAVED = new java.util.concurrent.ConcurrentHashMap<>();
     private static final int SAVED_MAX = 4096;
 
-    /**
-     * This server's saved profile, read without touching Vault Hunters' state. The file is read in one go and parsed
-     * from memory: NbtIo.read(File) reads it a few bytes per system call, which cost milliseconds of server tick.
-     */
+    /** The saved level alone, or null. */
     static Integer readSaved(MinecraftServer server, UUID uuid) {
+        SavedProfile profile = savedProfile(server, uuid);
+        return profile == null ? null : profile.level();
+    }
+
+    /**
+     * This server's saved profile, read without touching Vault Hunters' state, or null when there is no readable
+     * file. The file is read in one go and parsed from memory: NbtIo.read(File) reads it a few bytes per system call,
+     * which cost milliseconds of server tick.
+     */
+    static SavedProfile savedProfile(MinecraftServer server, UUID uuid) {
+        if (server == null || uuid == null) return null;
         Path file = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + PROFILE_SUFFIX);
         java.nio.file.attribute.BasicFileAttributes attrs;
         try {
@@ -94,18 +105,30 @@ public final class VaultLevels {
         long modified = attrs.lastModifiedTime().toMillis();
         long size = attrs.size();
         Saved hit = SAVED.get(file);
-        if (hit != null && hit.modified() == modified && hit.size() == size) return hit.level();
+        if (hit != null && hit.modified() == modified && hit.size() == size) return hit.profile();
         try {
             byte[] bytes = Files.readAllBytes(file);
-            Integer level = levelIn(NbtIo.read(new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes)),
+            SavedProfile profile = profileIn(NbtIo.read(new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes)),
                     net.minecraft.nbt.NbtAccounter.UNLIMITED));
             if (SAVED.size() >= SAVED_MAX) SAVED.clear();
-            SAVED.put(file, new Saved(modified, size, level));
-            return level;
+            SAVED.put(file, new Saved(modified, size, profile));
+            return profile;
         } catch (IOException | RuntimeException e) {
-            VHCCTweaks.LOGGER.warn("Could not read the saved vault level in {}", file, e);
+            VHCCTweaks.LOGGER.warn("Could not read the saved profile {}", file, e);
             return null;
         }
+    }
+
+    /** Each part is read on its own: a Temper section this does not understand must not lose the level. */
+    static SavedProfile profileIn(CompoundTag profile) {
+        Integer level = levelIn(profile);
+        SavedTemper temper = null;
+        try {
+            temper = SavedTemper.in(profile);
+        } catch (RuntimeException e) {
+            Safety.logOnce("VaultLevels.savedTemper", e);
+        }
+        return new SavedProfile(level, temper);
     }
 
     static void resetSaved() {

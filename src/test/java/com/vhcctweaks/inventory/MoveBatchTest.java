@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -135,5 +136,39 @@ class MoveBatchTest {
         MoveBatch.Move move = MoveBatch.parse(list(named("fromSlot", 2.0, "to", "x")), 1).get(0);
         assertNull(move.toSlot());
         assertNull(move.limit());
+    }
+
+    @Test
+    void aMoveCanNameTheItemItExpects() throws LuaException {
+        Map<Object, Object> move = new HashMap<>();
+        move.put("fromSlot", 3.0);
+        move.put("to", "minecraft:chest_1");
+        move.put("expectName", "the_vault:sword");
+        Map<Object, Object> moves = new HashMap<>();
+        moves.put(1.0, move);
+        MoveBatch.Move parsed = MoveBatch.parse(moves, 10).get(0);
+        assertEquals("the_vault:sword", parsed.expectName());
+        assertTrue(parsed.accepts("the_vault:sword"));
+        assertFalse(parsed.accepts("the_vault:axe"));
+        assertFalse(parsed.accepts(null));
+    }
+
+    @Test
+    void aMoveThatExpectsNothingAcceptsAnything() {
+        MoveBatch.Move move = new MoveBatch.Move(1, "left", null, null);
+        assertNull(move.expectName());
+        assertTrue(move.accepts("minecraft:dirt"));
+        assertTrue(move.accepts(null));
+    }
+
+    @Test
+    void expectNameMustBeAString() {
+        Map<Object, Object> move = new HashMap<>();
+        move.put("fromSlot", 3.0);
+        move.put("to", "minecraft:chest_1");
+        move.put("expectName", 5.0);
+        Map<Object, Object> moves = new HashMap<>();
+        moves.put(1.0, move);
+        assertThrows(LuaException.class, () -> MoveBatch.parse(moves, 10));
     }
 }

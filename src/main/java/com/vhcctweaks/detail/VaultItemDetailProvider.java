@@ -149,6 +149,10 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
             if (slot != null) gear.put("equipmentSlot", slot.getName());
         } catch (Exception ignored) {}
 
+        // Known before identification too: the forced-legendary flag and an Etching's greed tier lock
+        putLegendaryFlag(gear, data);
+        putGreedTier(gear, data);
+
         // If not identified, return early with minimal info
         if (data.getState() != VaultGearState.IDENTIFIED) {
             gear.put("identified", false);
@@ -170,7 +174,6 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         }
 
         // Special flags
-        data.getFirstValue(ModGearAttributes.IS_LEGENDARY).ifPresent(v -> { if (v) gear.put("isLegendary", true); });
         data.getFirstValue(ModGearAttributes.SOULBOUND).ifPresent(v -> { if (v) gear.put("isSoulbound", true); });
         data.getFirstValue(ModGearAttributes.UNIQUE_ITEM_KEY).ifPresent(v -> gear.put("uniqueKey", v.toString()));
         data.getFirstValue(ModGearAttributes.GEAR_NAME).ifPresent(v -> gear.put("gearName", v.toString()));
@@ -181,8 +184,66 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         // Modifiers, each parsed once against one tier config, and the real base attributes
         putModifiers(gear, stack, data);
         putBaseAttributes(gear, stack, data);
+        putLegendaryFromModifiers(gear);
+
+        // Last, because it annotates the modifiers above
+        GearScores.put(gear, stack);
 
         return gear;
+    }
+
+    /** The flag that forces a legendary roll. It is on the item before it is identified. */
+    private static void putLegendaryFlag(Map<String, Object> out, VaultGearData data) {
+        try {
+            data.getFirstValue(ModGearAttributes.IS_LEGENDARY).ifPresent(v -> { if (v) out.put("isLegendary", true); });
+        } catch (RuntimeException | LinkageError e) {
+            com.vhcctweaks.util.Safety.logOnce("item detail legendary flag", e);
+        }
+    }
+
+    /** An identified piece is legendary when one of its modifiers is, whether or not the flag was ever set. */
+    private static void putLegendaryFromModifiers(Map<String, Object> out) {
+        if (Boolean.TRUE.equals(out.get("isLegendary"))) return;
+        for (String key : MODIFIER_KEYS) {
+            if (!(out.get(key) instanceof List<?> modifiers)) continue;
+            for (Object modifier : modifiers) {
+                if (modifier instanceof Map<?, ?> map && Boolean.TRUE.equals(map.get("legendary"))) {
+                    out.put("isLegendary", true);
+                    return;
+                }
+            }
+        }
+    }
+
+    private static final String[] MODIFIER_KEYS = {"implicits", "prefixes", "suffixes"};
+
+    /**
+     * The greed tier an Etching put on the piece (Vault Hunters 3.21.74). A player below it gets nothing from the
+     * piece for Gear Power. Absent on a piece with no lock, and on a Vault Hunters without the attribute.
+     */
+    private static void putGreedTier(Map<String, Object> out, VaultGearData data) {
+        try {
+            data.getFirstValue(ModGearAttributes.GREED_TIER).ifPresent(v -> { if (v > 0) out.put("greedTier", v); });
+        } catch (RuntimeException | LinkageError e) {
+            com.vhcctweaks.util.Safety.logOnce("item detail greed tier", e);
+        }
+    }
+
+    /** A whole-number attribute summed over the item, or nothing when it is absent, zero or unreadable. */
+    private static void putIntSum(Map<String, Object> out, String key, VaultGearData data,
+                                  java.util.function.Supplier<iskallia.vault.gear.attribute.VaultGearAttribute<Integer>> attribute) {
+        try {
+            int value = data.get(attribute.get(), VaultGearAttributeTypeMerger.intSum());
+            if (value > 0) out.put(key, value);
+        } catch (RuntimeException | LinkageError e) {
+            com.vhcctweaks.util.Safety.logOnce("item detail " + key, e);
+        }
+    }
+
+    /** state and identified, as Gear has them. */
+    private static void putState(Map<String, Object> out, VaultGearData data) {
+        out.put("state", data.getState().name());
+        out.put("identified", data.getState() == VaultGearState.IDENTIFIED);
     }
 
     /** implicits, prefixes and suffixes, with the item's tier config looked up once. */
@@ -224,7 +285,21 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         tool.put("rarity", data.getRarity().name());
         tool.put("repairSlots", buildRepairSlots(data));
         tool.put("durability", buildDurability(stack, data));
+        putState(tool, data);
+        putIntSum(tool, "capacity", data, () -> ModGearAttributes.TOOL_CAPACITY);
+        putIntSum(tool, "hammerSize", data, () -> ModGearAttributes.HAMMER_SIZE);
+        try {
+            var material = ToolItem.getMaterial(stack);
+            if (material != null) tool.put("material", material.name());
+        } catch (RuntimeException | LinkageError e) {
+            com.vhcctweaks.util.Safety.logOnce("item detail tool material", e);
+        }
+        putLegendaryFlag(tool, data);
+        data.getFirstValue(ModGearAttributes.SOULBOUND).ifPresent(v -> { if (v) tool.put("isSoulbound", true); });
+        Map<String, Object> potential = buildCraftingPotential(data);
+        if (!potential.isEmpty()) tool.put("craftingPotential", potential);
         putModifiers(tool, stack, data);
+        putLegendaryFromModifiers(tool);
 
         return tool;
     }
@@ -239,7 +314,11 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         jewel.put("name", displayName(stack));
         jewel.put("level", data.getItemLevel());
         jewel.put("rarity", data.getRarity().name());
+        putState(jewel, data);
+        putIntSum(jewel, "size", data, () -> ModGearAttributes.JEWEL_SIZE);
+        putLegendaryFlag(jewel, data);
         putModifiers(jewel, stack, data);
+        putLegendaryFromModifiers(jewel);
 
         return jewel;
     }
@@ -531,9 +610,11 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
                     ? data.get(ModGearAttributes.DURABILITY, VaultGearAttributeTypeMerger.intSum())
                     : vgi.getMaxDamage(stack);
             dur.put("total", max);
+            dur.put("max", max);
             dur.put("current", max - vgi.getDamage(stack));
         } catch (Exception ignored) {
             dur.put("total", stack.getMaxDamage());
+            dur.put("max", stack.getMaxDamage());
             dur.put("current", stack.getMaxDamage() - stack.getDamageValue());
         }
         return dur;
@@ -544,6 +625,12 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
         data.getFirstValue(ModGearAttributes.CRAFTING_POTENTIAL).ifPresent(v -> cp.put("current", v));
         data.getFirstValue(ModGearAttributes.MAX_CRAFTING_POTENTIAL).ifPresent(v -> cp.put("max", v));
         return cp;
+    }
+
+    /** Reported as greedTier. Looked up by id, so a Vault Hunters without the attribute is not an error. */
+    private static boolean isGreedTier(iskallia.vault.gear.attribute.VaultGearAttribute<?> attr) {
+        ResourceLocation id = attr.getRegistryName();
+        return id != null && "the_vault".equals(id.getNamespace()) && "greed_tier".equals(id.getPath());
     }
 
     private boolean isSkippedAttribute(VaultGearAttributeInstance<?> instance) {
@@ -558,6 +645,7 @@ public class VaultItemDetailProvider implements IDetailProvider<ItemStack> {
                 || attr.equals(ModGearAttributes.SOULBOUND)
                 || attr.equals(ModGearAttributes.UNIQUE_ITEM_KEY)
                 || attr.equals(ModGearAttributes.GEAR_NAME)
-                || attr.equals(ModGearAttributes.STATE);
+                || attr.equals(ModGearAttributes.STATE)
+                || isGreedTier(attr);
     }
 }

@@ -90,6 +90,7 @@ vhcc.move("old.txt", "new.txt")           -- rename/move
 vhcc.copy("src.txt", "dst.txt")           -- copy file
 vhcc.exists("path"), vhcc.isDir("path"), vhcc.getSize("path")
 vhcc.isAvailable(), vhcc.getBasePath()
+local used, limit = vhcc.getUsage()        -- bytes used and allowed for this computer
 ```
 
 **Security**: Strict path validation (no `..`, no absolute paths, no symlink traversal), 1 MB write limit, 16 MB per computer (`vhccFiles.maxBytesPerComputer`), 16-level depth limit, allowlist character set.

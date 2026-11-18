@@ -476,3 +476,59 @@ while true do
         end
     end
 end
+
+-- ===========================================================================
+-- Player vault data (2.2.36 and 2.2.37). Read-only, no approval needed.
+-- `player` is a name or a UUID string. A player counts as online only on this server.
+-- ===========================================================================
+
+---@class GearPowerSlotDetail
+---@field status string COUNTED|EMPTY|NO_WEAPON|NOT_VAULT_GEAR|NOT_COMBAT_GEAR|INERT|GREED_TIER_LOCKED|NO_TIER_CONFIG
+---@field score number
+---@field item? string Registry name of the item in the slot
+---@field name? string Its display name
+---@field hotbarSlot? number 1 to 9: which hotbar weapon counts (weapon slot only)
+---@field hotbarWeapons? number How many weapons were on the hotbar
+
+---@class PlayerGearPower
+---@field online boolean
+---@field shown boolean false below minLevel and for a player who is not on this server: no scores then
+---@field level? number Vault level, can be above 100
+---@field minLevel? number The level Gear Power starts at
+---@field greedTier? number
+---@field gearScore? number As the game shows it
+---@field gearScoreExact? number The mean of the six slot scores
+---@field gearPower? number round(gearScoreExact * temper)
+---@field temper? number (max(might, magic) + vigor) / 2
+---@field might? number
+---@field magic? number
+---@field vigor? number
+---@field slots? table<string, number> head, chest, legs, feet, weapon, offhand
+---@field slotDetails? table<string, GearPowerSlotDetail>
+---@field peakGearPower? number The highest Gear Power ever reached
+
+---@class TemperCategory
+---@field level number Levels bought, 0 to 400
+---@field multiplier? number What the category multiplies Gear Power by
+---@field power? number What the category multiplies its effect by inside a vault
+
+---@class PlayerTemper
+---@field online boolean
+---@field dust number
+---@field might TemperCategory
+---@field magic TemperCategory
+---@field vigor TemperCategory
+---@field tool TemperCategory Does not count for Gear Power
+---@field gearPowerMultiplier? number
+---@field peakGearPower? number
+---@field trialsRecord? number
+---@field bossesBeaten? number Online only
+---@field favorsUsed? number Online only
+
+--- local level, err = ccvault.getPlayerVaultLevel(player)       -- number | nil, "unknown player" | "no vault data"
+--- local gear, err  = ccvault.getPlayerEquipment(player)        -- table  | nil, "unknown player" | "player offline"
+--- local power, err = ccvault.getPlayerGearPower(player)        -- PlayerGearPower | nil, "unknown player" | "no vault data" | "gear power not available"
+--- local temper, err = ccvault.getPlayerTemper(player)          -- PlayerTemper | nil, "unknown player" | "no vault data" | "temper not available"
+--- local rep, err   = ccvault.getPlayerReputation(player)       -- { velara=, tenos=, wendarr=, idona= } | nil, "unknown player" | "player offline" | "reputation not available"
+--- local limits     = ccvault.getLimits()                       -- { maxTransferAmount=, maxBatchMoves=, maxWatchesPerComputer=, ... }
+--- local used, limit = vhcc.getUsage()                          -- bytes used by this computer's vhcc folder, and its allowance

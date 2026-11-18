@@ -323,6 +323,20 @@ public class VHCCTweaksAPI implements ILuaAPI {
     }
 
     /**
+     * How much of its disk allowance this computer's folder uses, and the allowance, both in bytes.
+     * Every file and folder counts as at least 4 KB. The used figure is recounted from disk at most once a minute.
+     * Lua: local used, limit = vhcc.getUsage()
+     */
+    @LuaFunction
+    public final Object[] getUsage() throws LuaException {
+        try {
+            return new Object[]{usage(), ModConfig.VHCC_MAX_BYTES_PER_COMPUTER.get()};
+        } catch (IOException | RuntimeException e) {
+            throw new LuaException("vhcc: getUsage failed - " + e.getMessage());
+        }
+    }
+
+    /**
      * List files and directories at a path. Returns a table of names.
      * Directory names end with "/".
      * Lua: local items = vhcc.list("folder")

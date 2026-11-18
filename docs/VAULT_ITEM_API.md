@@ -5,6 +5,18 @@
 
 ---
 
+## New in 2.2.37
+
+Built against Vault Hunters 3.21.74. The contract is in `docs/SPEC_2_2_37.md`.
+
+- Identified gear has its own **Gear Score**: `gearScore`, `gearScoreExact`, `gearScoreStatus`, `gearScoreLines`, and on each modifier `scoreRatio`, `scorePoints`, `naturalBest`, `naturalWorst`. See [Gear Score](#gear-score).
+- `isLegendary` is reported on unidentified gear when the item is flagged, and on identified gear, tools and jewels whenever a modifier is legendary.
+- `greedTier` on gear an Etching locked to a greed tier.
+- Heal on Kill and Heal on Block values say which number is which: `{ first, second, chance, amount }`.
+- `durability.max`, the same number as `durability.total`.
+- Every modifier has `attribute`, the attribute's registry id.
+- Jewels have `size`, `state` and `identified`. Tools have `capacity`, `hammerSize`, `material`, `state`, `identified`, `isSoulbound` and `craftingPotential`.
+
 ## Overview
 
 The Vault Item Detail API automatically enriches CC:Tweaked's `getItemDetail()` with comprehensive Vault Hunters item data. **No special block or peripheral is required** — it works with any inventory (chests, barrels, shulker boxes, modded inventories, turtle inventories, etc.).
@@ -94,11 +106,12 @@ local gear = detail.vaultData
 --
 -- If identified:
 -- gear.repairSlots    = { total = 3, used = 1 }
--- gear.durability     = { total = 2048, current = 1995 }
+-- gear.durability     = { total = 2048, max = 2048, current = 1995 }   (max is the same number as total)
 -- gear.craftingPotential = { current = 12, max = 45 } (absent on UNIQUE rarity)
 -- gear.prefixSlots    = 2                             (max prefix modifier slots)
 -- gear.suffixSlots    = 2                             (max suffix modifier slots)
--- gear.isLegendary    = true                          (only present if true)
+-- gear.isLegendary    = true                          (only present if true: flagged, or a modifier is legendary)
+-- gear.greedTier      = 2                             (only on gear an Etching locked; also before identification)
 -- gear.isSoulbound    = true                          (only present if true)
 -- gear.uniqueKey      = "the_vault:gear/unique_key"   (only on UNIQUE items)
 -- gear.gearName       = "Sword of the Ancients"       (custom name, if set)
@@ -108,6 +121,35 @@ local gear = detail.vaultData
 -- gear.prefixes  = { ... }
 -- gear.suffixes  = { ... }
 -- gear.attributes = { ... }   (base attributes not covered above, as { name = "...", value = ... })
+--
+-- Gear Score (Vault Hunters 3.21.74, see below):
+-- gear.gearScoreStatus = "COUNTED"
+-- gear.gearScore       = 874
+-- gear.gearScoreExact  = 873.6
+-- gear.gearScoreLines  = { expected = 7, actual = 6 }
+```
+
+Unidentified gear has `itemType`, `name`, `level`, `rarity` (a placeholder until it is identified), `state`, `gearType`, `equipmentSlot`, `identified = false`, and `isLegendary` and `greedTier` when they apply.
+
+#### Gear Score
+
+Vault Hunters 3.21.74 scores a player's worn gear. `gearScore` is that score for one piece, worked out by the game's own scorer: what the piece adds in its slot for anyone who can use it. Gear never goes above level 100, so the wearer's level and greed tier are taken as high enough.
+
+- `gearScoreStatus` is `COUNTED`, or why the piece does not score: `INERT` (it is broken), `NO_TIER_CONFIG`, `NOT_COMBAT_GEAR`.
+- `gearScore` is 0 to 1500. About 1000 is a perfect natural OMEGA piece, and a legendary line can push it above. It is only present when the status is `COUNTED`.
+- `gearScoreLines.expected` is the line count of a best natural piece of this type and `actual` is this piece's. The score divides by the larger, so a piece with fewer lines scores less.
+- Each modifier of a counted piece has `scoreRatio` (0 to 1.5; 1 is the best natural roll at level 100, and a line with no number counts as 1), `scorePoints` (its share of `gearScore` before the 1500 cap) and, for number lines with a known range, `naturalBest` and `naturalWorst`.
+- Only `itemType == "Gear"` has these. Tools, jewels, charms and etchings do not.
+- They are absent on a server whose Vault Hunters is older than 3.21.74, or when the server config turns them off (`vaultDetails.gearScore`, `vaultDetails.gearScoreLines`). Always check for nil.
+
+```lua
+local gear = chest.getItemDetail(slot).vaultData
+if gear and gear.gearScore then
+    print(gear.name .. ": " .. gear.gearScore)
+    for _, mod in ipairs(gear.prefixes) do
+        print(("  %s  %.0f%%  +%.0f"):format(mod.name, (mod.scoreRatio or 0) * 100, mod.scorePoints or 0))
+    end
+end
 ```
 
 Before 2.2.36 `gear.attributes` (and `etching.attributes`) repeated every implicit, prefix and suffix. It now lists the item's base attributes, such as durability, and is often short or absent.
@@ -122,7 +164,15 @@ Before 2.2.36 tools and jewels were caught by the gear parser and reported `item
 -- tool.level     = 50
 -- tool.rarity    = "COMMON"
 -- tool.repairSlots  = { total = 2, used = 0 }
--- tool.durability   = { total = 2048, current = 2048 }
+-- tool.durability   = { total = 2048, max = 2048, current = 2048 }
+-- tool.state        = "IDENTIFIED"
+-- tool.identified   = true
+-- tool.capacity     = 35                  (jewel capacity left; absent when 0)
+-- tool.hammerSize   = 3                   (absent when the tool is no hammer)
+-- tool.material     = "CHROMATIC_STEEL_INGOT"
+-- tool.isLegendary  = true                (only present if true)
+-- tool.isSoulbound  = true                (only present if true)
+-- tool.craftingPotential = { current = 12, max = 45 }   (absent when the tool has none)
 -- tool.implicits = { ... }
 -- tool.prefixes  = { ... }
 -- tool.suffixes  = { ... }
@@ -135,6 +185,10 @@ Before 2.2.36 tools and jewels were caught by the gear parser and reported `item
 -- jewel.name      = "Jewel of Fortune"
 -- jewel.level     = 60
 -- jewel.rarity    = "EPIC"
+-- jewel.state     = "IDENTIFIED"
+-- jewel.identified = true
+-- jewel.size      = 20                    (absent when unknown)
+-- jewel.isLegendary = true                (only present if true)
 -- jewel.implicits = { ... }
 -- jewel.prefixes  = { ... }
 -- jewel.suffixes  = { ... }
@@ -196,6 +250,10 @@ Before 2.2.36 tools and jewels were caught by the gear parser and reported `item
 -- crystal.instability  = 0.5
 -- crystal.capacity     = 10
 -- crystal.level        = 75
+-- crystal.clarity      = true             (when the crystal says)
+-- crystal.volume       = 3
+-- crystal.exhausted    = false
+-- crystal.sigil        = "the_vault:adept"
 ```
 
 ### Vault Doll
@@ -256,6 +314,7 @@ Modifiers (in `implicits`, `prefixes`, `suffixes` arrays) have this structure:
 ```lua
 {
     name  = "+5.2% Reach Distance",      -- human-readable modifier name
+    attribute = "the_vault:reach",        -- the attribute's registry id: a key that never changes (2.2.37)
     value = 5.2,                          -- the rolled value (number, boolean, string, or table)
     tier  = 3,                            -- rolled tier (1-indexed), absent for deterministic modifiers
     min   = 2.0,                          -- minimum possible value at this tier (if available)
@@ -272,8 +331,16 @@ Modifiers (in `implicits`, `prefixes`, `suffixes` arrays) have this structure:
     corrupted = true,                     -- corrupted modifier
     imbued = true,                        -- imbued modifier
     abilityEnhancement = true,            -- ability enhancement
+
+    -- Gear Score of this line, on counted gear (2.2.37, Vault Hunters 3.21.74):
+    scoreRatio = 0.87,                    -- 1 is the best natural roll at level 100; up to 1.5
+    scorePoints = 124.3,                  -- this line's share of the piece's gearScore
+    naturalBest = 6.0,                    -- best and worst natural roll at level 100 for this gear type
+    naturalWorst = 1.0,                   -- (number lines with a known range only)
 }
 ```
+
+Summon Damage, Leech and the other number rolls are plain modifiers: `{ name = "Summon Damage", attribute = "the_vault:summon_damage", value = 0.12, min = 0.08, max = 0.15, tier = 4 }`.
 
 ### Complex Value Types
 
@@ -293,6 +360,12 @@ Some modifiers have structured values instead of simple numbers:
 ```lua
 { modifier = "gilded", count = 3, time = 600 }
 ```
+
+**Heal on Kill / Heal on Block** (`the_vault:on_kill_heal`, `the_vault:block_heal`):
+```lua
+{ first = 0.25, second = 3.0, chance = 0.25, amount = 3.0 }   -- chance is first, amount is second
+```
+Other pair values have only `first` and `second`.
 
 **Ability AOE / Cooldown:**
 ```lua
@@ -413,7 +486,8 @@ end
 ## Notes
 
 - `vaultData` is only present on Vault Hunters items. Vanilla/other mod items return `nil`.
-- Unidentified gear returns minimal data (itemType, name, level, rarity, state, identified=false).
+- Unidentified gear returns minimal data (itemType, name, level, rarity, state, identified=false), plus `isLegendary` and `greedTier` when they apply. Its rarity is a placeholder until it is identified.
+- The Gear Score fields need Vault Hunters 3.21.74 on the server and are absent otherwise.
 - Modifier `min`/`max` ranges depend on the tier config being available at runtime. If the config can't be read, only `value` is returned.
 - Category flags (`legendary`, `frozen`, etc.) are **only present when `true`** — check with `if mod.frozen then` not `if mod.frozen == true`.
 - The `attributes` array on gear contains base properties not covered by the top-level keys or modifier lists. It may be empty.

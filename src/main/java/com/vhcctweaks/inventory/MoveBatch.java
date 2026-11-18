@@ -12,11 +12,22 @@ import java.util.function.LongSupplier;
  * The parts of moveMany that need no game: reading the moves table and running a batch against a time budget.
  *
  * A move is { fromSlot = n, to = "name", toSlot = n, limit = n }. The same four may be given by position instead,
- * { n, "name", n, n }, in that order.
+ * { n, "name", n, n }, in that order. A move may also carry expectName = "mod:item": it then moves nothing unless
+ * that is the item in fromSlot, so a slot someone changed since the program looked is left alone.
  */
 public final class MoveBatch {
 
-    public record Move(int fromSlot, String to, Integer toSlot, Integer limit) {}
+    public record Move(int fromSlot, String to, Integer toSlot, Integer limit, String expectName) {
+
+        public Move(int fromSlot, String to, Integer toSlot, Integer limit) {
+            this(fromSlot, to, toSlot, limit, null);
+        }
+
+        /** Whether the move may go ahead with this item in fromSlot. itemName is null for an empty slot. */
+        public boolean accepts(String itemName) {
+            return expectName == null || expectName.equals(itemName);
+        }
+    }
 
     @FunctionalInterface
     public interface Step {
@@ -52,11 +63,16 @@ public final class MoveBatch {
             Object fromSlot = field(move, "fromSlot", 1);
             Object to = field(move, "to", 2);
             if (!(to instanceof String toName)) throw new LuaException("bad move #" + i + " (to expected string)");
+            Object expect = move.get("expectName");
+            if (expect != null && !(expect instanceof String)) {
+                throw new LuaException("bad move #" + i + " (expectName expected string)");
+            }
             parsed.add(new Move(
                     integer(i, "fromSlot", fromSlot),
                     toName,
                     optInteger(i, "toSlot", field(move, "toSlot", 3)),
-                    optInteger(i, "limit", field(move, "limit", 4))));
+                    optInteger(i, "limit", field(move, "limit", 4)),
+                    (String) expect));
         }
         return parsed;
     }

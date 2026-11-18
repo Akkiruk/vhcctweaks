@@ -26,6 +26,10 @@ public class ModConfig {
     public static final ForgeConfigSpec.IntValue INVENTORY_BATCH_TIME_BUDGET_MICROS;
     public static final ForgeConfigSpec.IntValue INVENTORY_MAX_WATCHES_PER_COMPUTER;
 
+    // Vault item details
+    public static final ForgeConfigSpec.BooleanValue DETAILS_GEAR_SCORE;
+    public static final ForgeConfigSpec.BooleanValue DETAILS_GEAR_SCORE_LINES;
+
     // vhcc file API
     public static final ForgeConfigSpec.LongValue VHCC_MAX_BYTES_PER_COMPUTER;
 
@@ -90,6 +94,16 @@ public class ModConfig {
         INVENTORY_MAX_WATCHES_PER_COMPUTER = builder
                 .comment("How many inventories one computer can watch for inventory_changed at once.")
                 .defineInRange("maxWatchesPerComputer", 64, 1, 1024);
+        builder.pop();
+
+        builder.comment("What getItemDetail says about Vault Hunters items").push("vaultDetails");
+        DETAILS_GEAR_SCORE = builder
+                .comment("Give each identified piece of gear its Gear Score, worked out by Vault Hunters' own scorer.",
+                         "Needs Vault Hunters 3.21.74 or newer; without it the field is simply absent.")
+                .define("gearScore", true);
+        DETAILS_GEAR_SCORE_LINES = builder
+                .comment("Also say what each modifier adds to the piece's Gear Score (scoreRatio, scorePoints, naturalBest, naturalWorst).")
+                .define("gearScoreLines", true);
         builder.pop();
 
         builder.comment("The vhcc file API. Each computer has its own private folder.").push("vhccFiles");

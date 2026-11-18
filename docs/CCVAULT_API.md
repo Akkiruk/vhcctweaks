@@ -5,6 +5,16 @@
 
 ---
 
+## New in 2.2.37
+
+The whole contract is in `docs/SPEC_2_2_37.md`. Built against Vault Hunters 3.21.74.
+
+- `ccvault.getPlayerGearPower(player)`: Gear Score, Gear Power, the multipliers behind it, the six slot scores and the peak.
+- `ccvault.getPlayerTemper(player)`: Dust, and the level and multiplier of Might, Magic, Vigor and Tool.
+- `ccvault.getPlayerReputation(player)`: reputation with each vault god.
+- `ccvault.getLimits()`: the server's limits, so a program does not have to guess them.
+- See [Player Vault Data](#player-vault-data) below. Item details gained a per-piece `gearScore`; see `docs/VAULT_ITEM_API.md`.
+
 ## New in 2.2.36
 
 The whole contract is in `docs/SPEC_2_2_36.md`. For money calls:
@@ -129,6 +139,92 @@ if bal then
     print("Akkiruk has " .. bal .. " tokens")
 end
 ```
+
+---
+
+### Player Vault Data
+
+| Function | Returns | Auth Required |
+|----------|---------|:---:|
+| `ccvault.getPlayerVaultLevel(player)` | `number` \| `nil, error` | No |
+| `ccvault.getPlayerEquipment(player)` | `table` \| `nil, error` | No |
+| `ccvault.getPlayerGearPower(player)` | `table` \| `nil, error` | No |
+| `ccvault.getPlayerTemper(player)` | `table` \| `nil, error` | No |
+| `ccvault.getPlayerReputation(player)` | `table` \| `nil, error` | No |
+
+`player` is a name or a UUID string, resolved like `getPlayerBalance`. All of these are read-only and need no approval, touch or range. The first call for a name the server has not seen can return `nil, "looking up player 'Name' - try again"`. A name nobody has is `nil, "unknown player"`.
+
+A player counts as online only when they are on **this** server. Someone on another server of the network is read from what this server saved, like an offline player.
+
+**Vault level.** `getPlayerVaultLevel` works online and offline. Since Vault Hunters 3.21.74 levels are not capped, so it can be above 100. Gear and crystals still stop at 100: past 100 the level is a progress number that unlocks Gear Power and Temper at 100 and nothing after.
+
+**Gear Power** (Vault Hunters 3.21.74). For a player on this server at level 100 or above:
+
+```lua
+local power, err = ccvault.getPlayerGearPower("Akkiruk")
+-- power.online         = true
+-- power.shown          = true            (false below minLevel: then there are no scores)
+-- power.level          = 104             (vault level, can be above 100)
+-- power.minLevel       = 100             (the level Gear Power starts at)
+-- power.greedTier      = 2
+-- power.gearScore      = 765             (as the game shows it)
+-- power.gearScoreExact = 765.083         (the mean of the six slot scores)
+-- power.gearPower      = 1339            (round(gearScoreExact * temper))
+-- power.temper         = 1.75            ((max(might, magic) + vigor) / 2)
+-- power.might, power.magic, power.vigor  (the multipliers; 1 with no Temper)
+-- power.slots          = { head = 900, chest = 850.5, legs = 0, feet = 1000, weapon = 1200, offhand = 640 }
+-- power.slotDetails    = { weapon = { status = "COUNTED", score = 1200, item = "the_vault:sword",
+--                                     name = "Blade", hotbarSlot = 3, hotbarWeapons = 2 }, ... }
+-- power.peakGearPower  = 1400            (the highest Gear Power ever reached)
+```
+
+- `weapon` is the best weapon anywhere on the hotbar, not the held item. `slotDetails.weapon.hotbarSlot` (1 to 9) says which one counts.
+- `status` is `COUNTED`, `EMPTY`, `NO_WEAPON`, `NOT_VAULT_GEAR`, `NOT_COMBAT_GEAR`, `INERT` (wrong slot, broken or above the player's level), `GREED_TIER_LOCKED` or `NO_TIER_CONFIG`.
+- Below `minLevel` the table has `shown = false` and no scores.
+- A player who is not on this server gets `{ online = false, shown = false, level =, peakGearPower = }`: Vault Hunters only saves the peak.
+- Errors of its own: `"no vault data"`, `"gear power not available"` (the server's Vault Hunters is older than 3.21.74).
+
+**Temper and Dust** (Vault Hunters 3.21.74):
+
+```lua
+local temper, err = ccvault.getPlayerTemper("Akkiruk")
+-- temper.online   = true
+-- temper.dust     = 12345
+-- temper.might    = { level = 40, multiplier = 2.0, power = 2.5 }
+-- temper.magic    = { level = 10, multiplier = 1.25, power = 1.3 }
+-- temper.vigor    = { level = 25, multiplier = 1.6, power = 1.8 }
+-- temper.tool     = { level = 3,  multiplier = 1.1, power = 1.05 }   (does not count for Gear Power)
+-- temper.gearPowerMultiplier = 1.8      ((max(might, magic) + vigor) / 2, from the multipliers)
+-- temper.peakGearPower = 1400
+-- temper.trialsRecord  = 17
+-- temper.bossesBeaten  = 2              (online only)
+-- temper.favorsUsed    = 1              (online only)
+```
+
+- `level` is the levels bought (0 to 400), `multiplier` what the category multiplies Gear Power by, `power` what it multiplies its effect by inside a vault.
+- It works for a player who is not on this server, from the saved profile, with `online = false`.
+- Errors of its own: `"no vault data"`, `"temper not available"`.
+
+**God reputation.** `getPlayerReputation` returns `{ velara =, tenos =, wendarr =, idona = }` for an online player. Errors of its own: `"player offline"`, `"reputation not available"`.
+
+---
+
+### Server Limits
+
+| Function | Returns | Auth Required |
+|----------|---------|:---:|
+| `ccvault.getLimits()` | `table` | No |
+
+```lua
+local limits = ccvault.getLimits()
+-- limits.maxTransferAmount, limits.interactionStaleSeconds, limits.nonceExpirySeconds,
+-- limits.authIdleTimeoutMinutes, limits.maxHistoryResults, limits.maxAllowanceMinutes,
+-- limits.maxLinksPerComputer, limits.maxBatchMoves, limits.batchTimeBudgetMicros,
+-- limits.maxWatchesPerComputer, limits.vhccMaxBytesPerComputer,
+-- limits.gearScoreInDetails, limits.gearScoreLinesInDetails
+```
+
+These are the server config values. A value that cannot be read is absent, so give each a fallback.
 
 ---
 

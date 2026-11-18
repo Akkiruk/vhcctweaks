@@ -4,6 +4,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 ## [Unreleased]
 
+- No changes yet.
+
+## [2.2.37] - 2026-11-17
+
 Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temper and Dust. Computers can read all of it now. Needs 3.21.74 on the server. On an older Vault Hunters the new stuff just isn't there, nothing breaks.
 
 ### Players

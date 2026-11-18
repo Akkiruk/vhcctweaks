@@ -35,6 +35,14 @@ Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temp
 - Jewels have `size`, `state` and `identified`. Tools have `capacity`, `hammerSize`, `material`, `state`, `identified`, `isSoulbound` and `craftingPotential`. Before this a sorter had to dig the jewel size out of the modifier list, and tools and jewels never said if they were identified.
 - Don't want the score work on every item read? `vaultDetails.gearScore` and `vaultDetails.gearScoreLines` in the server config turn it off.
 
+### Inventories
+
+- Computers can look inside a backpack or shulker box that's sitting in a chest. `listContents(slot)` lists what's in it, pass `true` as the second argument to get full item details.
+- `pushContents(to, slot, innerSlot)` pulls stuff out of it without taking the backpack out first. Works like `pushItems`. In `moveMany` add `inner = n` to a move.
+- Sophisticated Backpacks go through their own handler, so filter upgrades still decide what can leave. Vault barrels you picked up with stuff inside work too.
+- `identify(slot, player)` identifies gear in a chest the same way the Identification Stand would for that player, so their legendary expertise and model discoveries count. They have to be online and have approved the computer. Also works on gear inside a backpack with a third argument.
+- Server owners can turn either off with `inventory.containerItems` and `inventory.identify`.
+
 ### Small stuff
 
 - `ccvault.getLimits()` returns the server's limits (max transfer, touch window, batch size, watch limit and so on). No more learning them from error messages.

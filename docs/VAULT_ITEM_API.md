@@ -16,6 +16,27 @@ Built against Vault Hunters 3.21.74. The contract is in `docs/SPEC_2_2_37.md`.
 - `durability.max`, the same number as `durability.total`.
 - Every modifier has `attribute`, the attribute's registry id.
 - Jewels have `size`, `state` and `identified`. Tools have `capacity`, `hammerSize`, `material`, `state`, `identified`, `isSoulbound` and `craftingPotential`.
+- `inventory.identify(slot, player [, innerSlot])` identifies an unidentified piece in place, the way the Identification Stand does for that player, and returns these details for the result. The player must be online and have approved the computer. See `docs/SPEC_2_2_37.md` section 8.
+- `inventory.listContents(slot [, detailed])` reads what is inside a backpack or shulker box in a slot; with `detailed` every entry carries the same `vaultData` as here. See section 7.
+
+```lua
+local chest = peripheral.wrap("minecraft:chest_0")
+for slot, item in pairs(chest.list()) do
+  local detail = chest.getItemDetail(slot)
+  if detail.vaultData and detail.vaultData.state == "UNIDENTIFIED" then
+    local piece, err = chest.identify(slot, "Steve")
+    if piece then print(piece.displayName, piece.vaultData.rarity) else print(err) end
+  end
+end
+
+-- Pull every unidentified piece out of the backpack in slot 1
+local contents = chest.listContents(1, true)
+for inner, item in pairs(contents or {}) do
+  if item.vaultData and item.vaultData.state == "UNIDENTIFIED" then
+    chest.pushContents("minecraft:barrel_0", 1, inner)
+  end
+end
+```
 
 ## Overview
 

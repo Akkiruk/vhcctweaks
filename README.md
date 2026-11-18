@@ -143,6 +143,8 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 | `ccvault.authIdleTimeoutMinutes` | `10` | Inactivity timeout before a CCVault approval expires |
 | `ccvault.nonceExpirySeconds` | `60` | How long the clickable approval prompt stays valid |
 | `ccvault.interactionStaleSeconds` | `30` | How recent an interaction must be for `"player"` (whoever touched last). A `"player:Name"` charge only needs their approval, since 2.2.37 |
+| `inventory.containerItems` | `true` | Computers can look into backpacks and shulker boxes sitting in an inventory and move things out (`listContents`, `pushContents`, `moveMany` with `inner`), since 2.2.37 |
+| `inventory.identify` | `true` | Computers can identify Vault Hunters gear in an inventory for a player who approved them (`identify`), since 2.2.37 |
 
 ## Testing
 

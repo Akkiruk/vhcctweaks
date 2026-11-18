@@ -171,4 +171,25 @@ class MoveBatchTest {
         moves.put(1.0, move);
         assertThrows(LuaException.class, () -> MoveBatch.parse(moves, 10));
     }
+
+    @Test
+    void aMoveCanReachInsideAContainerItem() throws LuaException {
+        MoveBatch.Move parsed = MoveBatch.parse(list(
+                named("fromSlot", 2.0, "to", "out", "inner", 7.0, "expectName", "the_vault:helmet")), 10).get(0);
+        assertEquals(new MoveBatch.Move(2, "out", null, null, "the_vault:helmet", 7), parsed);
+        assertNull(MoveBatch.parse(list(named("fromSlot", 2.0, "to", "out")), 10).get(0).inner());
+    }
+
+    @Test
+    void innerIsByKeyOnly() throws LuaException {
+        // A fifth positional value is not inner
+        assertNull(MoveBatch.parse(list(list(1.0, "out", 2.0, 3.0, 4.0)), 10).get(0).inner());
+    }
+
+    @Test
+    void innerMustBeANumber() {
+        LuaException e = assertThrows(LuaException.class,
+                () -> MoveBatch.parse(list(named("fromSlot", 1.0, "to", "out", "inner", "3")), 10));
+        assertEquals("bad move #1 (inner expected number)", e.getMessage());
+    }
 }

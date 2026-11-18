@@ -13,6 +13,8 @@ The whole contract is in `docs/SPEC_2_2_37.md`. Built against Vault Hunters 3.21
 - `ccvault.getPlayerTemper(player)`: Dust, and the level and multiplier of Might, Magic, Vigor and Tool.
 - `ccvault.getPlayerReputation(player)`: reputation with each vault god.
 - `ccvault.getLimits()`: the server's limits, so a program does not have to guess them.
+- Inventories can `identify(slot, player [, innerSlot])` Vault Hunters gear the way the Identification Stand does for that player. The player has to be online and have approved the computer with `ccvault.requestAuth()`, the same approval `"player:Name"` uses. See `docs/SPEC_2_2_37.md` section 8.
+- Inventories can look into backpacks and shulker boxes in their slots with `listContents(slot)` and move things out with `pushContents` or a `moveMany` move with `inner`. Section 7 of the spec.
 - See [Player Vault Data](#player-vault-data) below. Item details gained a per-piece `gearScore`; see `docs/VAULT_ITEM_API.md`.
 
 ## New in 2.2.36
@@ -221,7 +223,8 @@ local limits = ccvault.getLimits()
 -- limits.authIdleTimeoutMinutes, limits.maxHistoryResults, limits.maxAllowanceMinutes,
 -- limits.maxLinksPerComputer, limits.maxBatchMoves, limits.batchTimeBudgetMicros,
 -- limits.maxWatchesPerComputer, limits.vhccMaxBytesPerComputer,
--- limits.gearScoreInDetails, limits.gearScoreLinesInDetails
+-- limits.gearScoreInDetails, limits.gearScoreLinesInDetails,
+-- limits.containerItems, limits.identify
 ```
 
 These are the server config values. A value that cannot be read is absent, so give each a fallback.

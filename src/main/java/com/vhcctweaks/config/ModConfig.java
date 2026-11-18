@@ -25,6 +25,8 @@ public class ModConfig {
     public static final ForgeConfigSpec.IntValue INVENTORY_MAX_BATCH_MOVES;
     public static final ForgeConfigSpec.IntValue INVENTORY_BATCH_TIME_BUDGET_MICROS;
     public static final ForgeConfigSpec.IntValue INVENTORY_MAX_WATCHES_PER_COMPUTER;
+    public static final ForgeConfigSpec.BooleanValue INVENTORY_CONTAINER_ITEMS;
+    public static final ForgeConfigSpec.BooleanValue INVENTORY_IDENTIFY;
 
     // Vault item details
     public static final ForgeConfigSpec.BooleanValue DETAILS_GEAR_SCORE;
@@ -94,6 +96,13 @@ public class ModConfig {
         INVENTORY_MAX_WATCHES_PER_COMPUTER = builder
                 .comment("How many inventories one computer can watch for inventory_changed at once.")
                 .defineInRange("maxWatchesPerComputer", 64, 1, 1024);
+        INVENTORY_CONTAINER_ITEMS = builder
+                .comment("Let computers look into backpacks, shulker boxes and other container items sitting in an inventory,",
+                         "and move things out of them (listContents, pushContents, moveMany with inner).")
+                .define("containerItems", true);
+        INVENTORY_IDENTIFY = builder
+                .comment("Let computers identify Vault Hunters gear in an inventory for a player who approved the computer (identify).")
+                .define("identify", true);
         builder.pop();
 
         builder.comment("What getItemDetail says about Vault Hunters items").push("vaultDetails");

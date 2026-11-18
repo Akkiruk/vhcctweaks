@@ -349,6 +349,8 @@ public class CCVaultAPI implements ILuaAPI {
                 .put("vhccMaxBytesPerComputer", ModConfig.VHCC_MAX_BYTES_PER_COMPUTER::get)
                 .put("gearScoreInDetails", ModConfig.DETAILS_GEAR_SCORE::get)
                 .put("gearScoreLinesInDetails", ModConfig.DETAILS_GEAR_SCORE_LINES::get)
+                .put("containerItems", ModConfig.INVENTORY_CONTAINER_ITEMS::get)
+                .put("identify", ModConfig.INVENTORY_IDENTIFY::get)
                 .build()});
     }
 

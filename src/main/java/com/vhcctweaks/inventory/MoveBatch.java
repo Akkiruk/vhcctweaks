@@ -13,14 +13,20 @@ import java.util.function.LongSupplier;
  *
  * A move is { fromSlot = n, to = "name", toSlot = n, limit = n }. The same four may be given by position instead,
  * { n, "name", n, n }, in that order. A move may also carry expectName = "mod:item": it then moves nothing unless
- * that is the item in fromSlot, so a slot someone changed since the program looked is left alone.
+ * that is the item in fromSlot, so a slot someone changed since the program looked is left alone. A move with
+ * inner = n moves out of slot n inside the container item in fromSlot (2.2.37), and expectName then checks that item.
+ * expectName and inner are given by key only.
  */
 public final class MoveBatch {
 
-    public record Move(int fromSlot, String to, Integer toSlot, Integer limit, String expectName) {
+    public record Move(int fromSlot, String to, Integer toSlot, Integer limit, String expectName, Integer inner) {
 
         public Move(int fromSlot, String to, Integer toSlot, Integer limit) {
-            this(fromSlot, to, toSlot, limit, null);
+            this(fromSlot, to, toSlot, limit, null, null);
+        }
+
+        public Move(int fromSlot, String to, Integer toSlot, Integer limit, String expectName) {
+            this(fromSlot, to, toSlot, limit, expectName, null);
         }
 
         /** Whether the move may go ahead with this item in fromSlot. itemName is null for an empty slot. */
@@ -72,7 +78,8 @@ public final class MoveBatch {
                     toName,
                     optInteger(i, "toSlot", field(move, "toSlot", 3)),
                     optInteger(i, "limit", field(move, "limit", 4)),
-                    (String) expect));
+                    (String) expect,
+                    optInteger(i, "inner", move.get("inner"))));
         }
         return parsed;
     }

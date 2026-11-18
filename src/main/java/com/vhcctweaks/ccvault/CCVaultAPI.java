@@ -832,13 +832,13 @@ public class CCVaultAPI implements ILuaAPI {
         return AllowanceManager.reserve(computerId, player.getUUID(), amount, System.currentTimeMillis()) ? player.getUUID() : null;
     }
 
-    /** A named player must be at this table: online, approved here, and touching it within the staleness window. */
+    /**
+     * A named player must be online and have approved this computer. The approval is the whole permission: it lasts until
+     * they disconnect or go idle here (SessionAuthManager), and no fresh touch is asked for on top of it, so a shop can
+     * charge a tab after its customer has walked off.
+     */
     private UUID resolveNamedPlayer(String target) throws LuaException {
-        String name = target.substring(NAMED_PLAYER_PREFIX.length());
         ServerPlayer player = approvedPlayer(target);
-        if (!ComputerInteractionTracker.isFresh(computerId, player.getUUID())) {
-            throw new LuaException("player '" + name + "' has not touched this computer recently");
-        }
         SessionAuthManager.touchSession(player.getUUID(), computerId);
         return player.getUUID();
     }

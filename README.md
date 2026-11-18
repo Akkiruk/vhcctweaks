@@ -142,7 +142,7 @@ A config file is generated at `serverconfig/vhcctweaks-server.toml` after first 
 | `vault.vaultDimension` | `the_vault:vault` | Resource location of the Vault dimension |
 | `ccvault.authIdleTimeoutMinutes` | `10` | Inactivity timeout before a CCVault approval expires |
 | `ccvault.nonceExpirySeconds` | `60` | How long the clickable approval prompt stays valid |
-| `ccvault.interactionStaleSeconds` | `30` | How recent player interaction must be for financial operations |
+| `ccvault.interactionStaleSeconds` | `30` | How recent an interaction must be for `"player"` (whoever touched last). A `"player:Name"` charge only needs their approval, since 2.2.37 |
 
 ## Testing
 

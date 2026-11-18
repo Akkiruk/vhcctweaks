@@ -28,7 +28,7 @@ The whole contract is in `docs/SPEC_2_2_36.md`. For money calls:
 ## New in 2.2.24
 
 - `vhcc_touch` event: `local _, playerName = os.pullEvent("vhcc_touch")`. It arrives immediately before the `monitor_touch` from that player's touch on an adjacent monitor.
-- `"player:Name"` target for `getBalance` and `transfer`: a named player at this table. They must be online, have approved this computer, and have touched it within the staleness window. Several players can hold sessions on one computer at once. `"player"` still means whoever touched last.
+- `"player:Name"` target for `getBalance` and `transfer`: a named player at this table. They must be online and have approved this computer; the approval lasts until they disconnect or go idle, with no fresh touch needed for each transfer (since 2.2.37). Several players can hold sessions on one computer at once. `"player"` still means whoever touched last.
 - `ccvault.setTerminalLock(locked)`, `ccvault.isTerminalLocked()`: the owner can make the terminal and block owner-only. Monitors still work for everyone, and server admins always get in.
 
 ## Overview

@@ -10,6 +10,10 @@ All notable changes to VH CC Tweaks are documented here.
 
 Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temper and Dust. Computers can read all of it now. Needs 3.21.74 on the server. On an older Vault Hunters the new stuff just isn't there, nothing breaks.
 
+### Money
+
+- Once you APPROVE a computer it can charge you (`"player:Name"`) until you disconnect or go idle at it. That's it. It used to also want you to have clicked it in the last 30 seconds, so a shop couldn't take your tab once you walked off.
+
 ### Players
 
 - `ccvault.getPlayerGearPower(player)` gives Gear Score, Gear Power, the Might/Magic/Vigor multipliers, the score of each of the six slots and the highest Gear Power they ever had. It also says which hotbar weapon is the one that counts, and why a slot scores 0 (empty, broken, greed tier too low).

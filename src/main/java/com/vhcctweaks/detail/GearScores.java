@@ -73,14 +73,101 @@ final class GearScores {
             }
             if (!(explained instanceof GearPowerBreakdown.SlotBreakdown breakdown)) return null;
 
+            AtLevel atLevel = null;
+            try {
+                atLevel = AtLevel.of(stack);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                Safety.logOnce("gear score ranges at level", e);
+            }
             List<GearScoreShape.Line> lines = new ArrayList<>(breakdown.lines().size());
             for (GearPowerBreakdown.LineScore line : breakdown.lines()) {
                 NaturalRange range = line.naturalRange();
+                NaturalRange here = range == null || atLevel == null ? null : atLevel.find(line.affixType(), line.attribute());
                 lines.add(new GearScoreShape.Line(line.affixType().name(), line.ratio(),
-                        range == null ? null : range.best(), range == null ? null : range.worst()));
+                        range == null ? null : range.best(), range == null ? null : range.worst(),
+                        here == null ? null : here.best(), here == null ? null : here.worst()));
             }
             return new GearScoreShape.Piece(breakdown.status().name(), breakdown.score(), breakdown.expectedLineCount(),
                     ModConfigs.GEAR_POWER.getPerfectSlotScore(), lines);
+        }
+
+        /**
+         * The natural ranges of a gear type at one item level (2.2.37), built the way Vault Hunters' GearTypeReference
+         * builds them at its reference level 100, with its own private readNaturalRange, and kept per tier config,
+         * Gear Power config and level.
+         */
+        private record AtLevel(Map<String, NaturalRange> byAffix, Map<net.minecraft.resources.ResourceLocation, NaturalRange> byAttribute) {
+
+            /** Per tier config (weakly, so a config reload lets the old one go): the Gear Power config it was built with, and the ranges by level. */
+            private record Built(Object power, Map<Integer, AtLevel> byLevel) {}
+
+            private static final Map<Object, Built> CACHE = new java.util.WeakHashMap<>();
+            private static Method readNaturalRange;
+
+            NaturalRange find(iskallia.vault.gear.attribute.VaultGearModifier.AffixType affix, net.minecraft.resources.ResourceLocation attribute) {
+                if (attribute == null) return null;
+                NaturalRange range = byAffix.get(affix.name() + "|" + attribute);
+                return range != null ? range : byAttribute.get(attribute);
+            }
+
+            static AtLevel of(ItemStack stack) throws ReflectiveOperationException {
+                net.minecraft.resources.ResourceLocation key = stack.getItem().getRegistryName();
+                if (key == null || ModConfigs.VAULT_GEAR_CONFIG == null) return null;
+                Object config = ((Map<?, ?>) ModConfigs.VAULT_GEAR_CONFIG).get(key);
+                iskallia.vault.config.GearPowerConfig power = ModConfigs.GEAR_POWER;
+                if (!(config instanceof iskallia.vault.config.gear.VaultGearTierConfig tiers) || power == null) return null;
+                int level = iskallia.vault.gear.data.VaultGearData.read(stack).getItemLevel();
+                synchronized (CACHE) {
+                    Built built = CACHE.get(tiers);
+                    AtLevel hit = built == null || built.power() != power ? null : built.byLevel().get(level);
+                    if (hit != null) return hit;
+                }
+                AtLevel made = build(key, tiers, power, level);
+                synchronized (CACHE) {
+                    Built built = CACHE.get(tiers);
+                    if (built == null || built.power() != power) {
+                        built = new Built(power, new java.util.HashMap<>());
+                        CACHE.put(tiers, built);
+                    }
+                    built.byLevel().put(level, made);
+                }
+                return made;
+            }
+
+            private static AtLevel build(net.minecraft.resources.ResourceLocation key, iskallia.vault.config.gear.VaultGearTierConfig tiers,
+                                         iskallia.vault.config.GearPowerConfig power, int level) throws ReflectiveOperationException {
+                Map<String, NaturalRange> byAffix = new java.util.HashMap<>();
+                Map<net.minecraft.resources.ResourceLocation, NaturalRange> byAttribute = new java.util.HashMap<>();
+                Object[][] groups = {
+                        {iskallia.vault.gear.attribute.VaultGearModifier.AffixType.IMPLICIT, iskallia.vault.config.gear.VaultGearTierConfig.ModifierAffixTagGroup.IMPLICIT},
+                        {iskallia.vault.gear.attribute.VaultGearModifier.AffixType.PREFIX, iskallia.vault.config.gear.VaultGearTierConfig.ModifierAffixTagGroup.PREFIX},
+                        {iskallia.vault.gear.attribute.VaultGearModifier.AffixType.SUFFIX, iskallia.vault.config.gear.VaultGearTierConfig.ModifierAffixTagGroup.SUFFIX}};
+                for (Object[] pair : groups) {
+                    var affix = (iskallia.vault.gear.attribute.VaultGearModifier.AffixType) pair[0];
+                    var group = tiers.getModifierGroup((iskallia.vault.config.gear.VaultGearTierConfig.ModifierAffixTagGroup) pair[1]);
+                    if (group == null) continue;
+                    for (iskallia.vault.config.gear.VaultGearTierConfig.ModifierTierGroup tierGroup : group) {
+                        net.minecraft.resources.ResourceLocation attribute = tierGroup.getAttribute();
+                        Object read = reader().invoke(null, key, tierGroup, level, power.isLowerBetter(attribute), power.getValueOffset(attribute));
+                        if (read instanceof java.util.Optional<?> optional && optional.orElse(null) instanceof NaturalRange range) {
+                            byAffix.merge(affix.name() + "|" + attribute, range, NaturalRange::union);
+                            byAttribute.merge(attribute, range, NaturalRange::union);
+                        }
+                    }
+                }
+                return new AtLevel(byAffix, byAttribute);
+            }
+
+            private static synchronized Method reader() throws ReflectiveOperationException {
+                if (readNaturalRange == null) {
+                    Method found = iskallia.vault.gear.power.GearTypeReference.class.getDeclaredMethod("readNaturalRange",
+                            net.minecraft.resources.ResourceLocation.class, iskallia.vault.config.gear.VaultGearTierConfig.ModifierTierGroup.class,
+                            int.class, boolean.class, double.class);
+                    found.setAccessible(true);
+                    readNaturalRange = found;
+                }
+                return readNaturalRange;
+            }
         }
 
         private static synchronized Method method() throws ReflectiveOperationException {

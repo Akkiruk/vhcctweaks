@@ -315,6 +315,47 @@ public class CCVaultAPI implements ILuaAPI {
         return Safety.lua("ccvault.getPlayerReputation", () -> playerRead(playerName, VaultPlayers::reputation));
     }
 
+    /**
+     * A player's abilities (with specialization and level), talents, expertises and prestige powers (2.2.37).
+     * A player who is not on this server is read from this server's saved profile, with online = false.
+     * Read-only, no auth. Returns the table, or nil and "unknown player", "no vault data" or "skills not available".
+     *
+     * Lua: local skills, err = ccvault.getPlayerSkills("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerSkills(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerSkills", () -> playerRead(playerName, (server, uuid) -> {
+            try {
+                return PlayerSkills.read(server, uuid);
+            } catch (LinkageError e) {
+                Safety.logOnce("PlayerSkills classes", e);
+                return new Object[]{null, PlayerSkills.NOT_AVAILABLE};
+            }
+        }));
+    }
+
+    /**
+     * An online player's stat totals as the Vault Hunters stat screen works them out, with each capped stat's cap
+     * (2.2.37): { [attributeId] = { name, value, display, limit, uncapped, hitLimit, extra } }.
+     * Read-only, no auth. Returns the table, or nil and "unknown player", "player offline" or "stats not available".
+     *
+     * Lua: local stats, err = ccvault.getPlayerStats("SomePlayer")
+     */
+    @LuaFunction(mainThread = true)
+    public final Object[] getPlayerStats(String playerName) throws LuaException {
+        return Safety.lua("ccvault.getPlayerStats", () -> playerRead(playerName, (server, uuid) -> {
+            ServerPlayer player = Safety.here(server, uuid);
+            if (player == null) return new Object[]{null, VaultPlayers.OFFLINE};
+            try {
+                Map<String, Object> stats = PlayerStats.read(player);
+                return stats.isEmpty() ? new Object[]{null, PlayerStats.NOT_AVAILABLE} : new Object[]{stats};
+            } catch (LinkageError e) {
+                Safety.logOnce("PlayerStats classes", e);
+                return new Object[]{null, PlayerStats.NOT_AVAILABLE};
+            }
+        }));
+    }
+
     /** Resolves the name like getPlayerBalance, then reads on this server only. */
     private Object[] playerRead(String playerName, java.util.function.BiFunction<net.minecraft.server.MinecraftServer, UUID, Object[]> read) {
         if (playerName == null || playerName.isBlank()) return new Object[]{null, VaultLevelReply.UNKNOWN_PLAYER};
@@ -351,6 +392,7 @@ public class CCVaultAPI implements ILuaAPI {
                 .put("gearScoreLinesInDetails", ModConfig.DETAILS_GEAR_SCORE_LINES::get)
                 .put("containerItems", ModConfig.INVENTORY_CONTAINER_ITEMS::get)
                 .put("identify", ModConfig.INVENTORY_IDENTIFY::get)
+                .put("statCaps", PlayerStats::caps)
                 .build()});
     }
 

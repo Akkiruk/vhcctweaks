@@ -76,6 +76,32 @@ class GearScoreShapeTest {
     }
 
     @Test
+    void aLineGetsItsRangeAtThePiecesOwnLevelWhenThereIsOne() {
+        Map<String, Object> gear = gear();
+        List<GearScoreShape.Line> lines = List.of(
+                new GearScoreShape.Line("IMPLICIT", 0.8, 100.0, 20.0, 60.0, 12.0),
+                new GearScoreShape.Line("PREFIX", 1.0, 30.0, 4.0, null, null),
+                new GearScoreShape.Line("PREFIX", 1.0, null, null, 5.0, 1.0));
+        GearScoreShape.put(gear, new GearScoreShape.Piece("COUNTED", 500.0, 6, 1000.0, lines), true);
+        Map<String, Object> armor = at(gear, "implicits", 0);
+        assertEquals(60.0, armor.get("naturalBestAtLevel"));
+        assertEquals(12.0, armor.get("naturalWorstAtLevel"));
+        assertEquals(100.0, armor.get("naturalBest"));
+        // No range at the level: only the level 100 pair
+        assertFalse(at(gear, "prefixes", 0).containsKey("naturalBestAtLevel"));
+        assertTrue(at(gear, "prefixes", 0).containsKey("naturalBest"));
+        // No level 100 range means no line range at all
+        assertFalse(at(gear, "prefixes", 1).containsKey("naturalBestAtLevel"));
+    }
+
+    @Test
+    void theOldLineShapeHasNoRangeAtLevel() {
+        GearScoreShape.Line line = new GearScoreShape.Line("IMPLICIT", 1.0, 2.0, 1.0);
+        assertEquals(null, line.bestAtLevel());
+        assertEquals(null, line.worstAtLevel());
+    }
+
+    @Test
     void morePiecesThanExpectedDivideByTheActualCount() {
         Map<String, Object> gear = gear();
         GearScoreShape.put(gear, new GearScoreShape.Piece("COUNTED", 950.0, 3, 1000.0, LINES), true);

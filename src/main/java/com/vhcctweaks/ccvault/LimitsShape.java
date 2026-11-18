@@ -16,8 +16,8 @@ final class LimitsShape {
         try {
             Object read = value.get();
             if (read != null) out.put(key, read);
-        } catch (RuntimeException e) {
-            // Config not loaded: the key is left out
+        } catch (RuntimeException | LinkageError e) {
+            // Config not loaded, or a Vault Hunters without the class: the key is left out
         }
         return this;
     }

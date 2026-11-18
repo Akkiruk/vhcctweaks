@@ -119,6 +119,24 @@ public final class VaultLevels {
         }
     }
 
+    /**
+     * The whole saved profile, read the same way as savedProfile but not cached (skill trees are big), or null when
+     * there is no readable file. Never loads the player into Vault Hunters.
+     */
+    static CompoundTag savedTag(MinecraftServer server, UUID uuid) {
+        if (server == null || uuid == null) return null;
+        Path file = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + PROFILE_SUFFIX);
+        if (!Files.isRegularFile(file)) return null;
+        try {
+            byte[] bytes = Files.readAllBytes(file);
+            return NbtIo.read(new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes)),
+                    net.minecraft.nbt.NbtAccounter.UNLIMITED);
+        } catch (IOException | RuntimeException e) {
+            VHCCTweaks.LOGGER.warn("Could not read the saved profile {}", file, e);
+            return null;
+        }
+    }
+
     /** Each part is read on its own: a Temper section this does not understand must not lose the level. */
     static SavedProfile profileIn(CompoundTag profile) {
         Integer level = levelIn(profile);

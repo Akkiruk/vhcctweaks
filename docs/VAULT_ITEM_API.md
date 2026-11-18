@@ -159,7 +159,9 @@ Vault Hunters 3.21.74 scores a player's worn gear. `gearScore` is that score for
 - `gearScoreStatus` is `COUNTED`, or why the piece does not score: `INERT` (it is broken), `NO_TIER_CONFIG`, `NOT_COMBAT_GEAR`.
 - `gearScore` is 0 to 1500. About 1000 is a perfect natural OMEGA piece, and a legendary line can push it above. It is only present when the status is `COUNTED`.
 - `gearScoreLines.expected` is the line count of a best natural piece of this type and `actual` is this piece's. The score divides by the larger, so a piece with fewer lines scores less.
-- Each modifier of a counted piece has `scoreRatio` (0 to 1.5; 1 is the best natural roll at level 100, and a line with no number counts as 1), `scorePoints` (its share of `gearScore` before the 1500 cap) and, for number lines with a known range, `naturalBest` and `naturalWorst`.
+- Each modifier of a counted piece has `scoreRatio` (0 to 1.5; 1 is the best natural roll at level 100, and a line with no number counts as 1), `scorePoints` (its share of `gearScore` before the 1500 cap) and, for number lines with a known range, `naturalBest` and `naturalWorst`, plus `naturalBestAtLevel` and `naturalWorstAtLevel`, the same range at the piece's own level, so a level 40 piece can be judged against level 40 rolls.
+- Uniques are scored too, against their base item's pools, and are never marked down for having fewer lines. Wold's Vaults battlestaffs, tridents and rangs go through the same scorer.
+- Ability and talent level lines score 1 whatever their size. Read the size from `value.levelChange`.
 - Only `itemType == "Gear"` has these. Tools, jewels, charms and etchings do not.
 - They are absent on a server whose Vault Hunters is older than 3.21.74, or when the server config turns them off (`vaultDetails.gearScore`, `vaultDetails.gearScoreLines`). Always check for nil.
 

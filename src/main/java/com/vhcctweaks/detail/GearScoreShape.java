@@ -17,8 +17,13 @@ final class GearScoreShape {
 
     static final String COUNTED = "COUNTED";
 
-    /** One modifier line. affix is IMPLICIT, PREFIX or SUFFIX; best and worst are null when there is no range. */
-    record Line(String affix, double ratio, Double best, Double worst) {}
+    /** One modifier line. affix is IMPLICIT, PREFIX or SUFFIX; best and worst are null when there is no range, and so are
+     *  bestAtLevel and worstAtLevel, the same range at the piece's own level (2.2.37), when they could not be had. */
+    record Line(String affix, double ratio, Double best, Double worst, Double bestAtLevel, Double worstAtLevel) {
+        Line(String affix, double ratio, Double best, Double worst) {
+            this(affix, ratio, best, worst, null, null);
+        }
+    }
 
     /**
      * @param status        Vault Hunters' SlotStatus name: COUNTED, INERT, NO_TIER_CONFIG, ...
@@ -61,6 +66,10 @@ final class GearScoreShape {
             if (line.best() != null && line.worst() != null) {
                 modifier.put("naturalBest", line.best());
                 modifier.put("naturalWorst", line.worst());
+                if (line.bestAtLevel() != null && line.worstAtLevel() != null) {
+                    modifier.put("naturalBestAtLevel", line.bestAtLevel());
+                    modifier.put("naturalWorstAtLevel", line.worstAtLevel());
+                }
             }
         }
     }

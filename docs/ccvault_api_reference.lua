@@ -530,5 +530,7 @@ end
 --- local power, err = ccvault.getPlayerGearPower(player)        -- PlayerGearPower | nil, "unknown player" | "no vault data" | "gear power not available"
 --- local temper, err = ccvault.getPlayerTemper(player)          -- PlayerTemper | nil, "unknown player" | "no vault data" | "temper not available"
 --- local rep, err   = ccvault.getPlayerReputation(player)       -- { velara=, tenos=, wendarr=, idona= } | nil, "unknown player" | "player offline" | "reputation not available"
+--- local skills, err = ccvault.getPlayerSkills(player)           -- { online=, abilities=, talents=, expertises=, prestige=, spentPoints= } | nil, "no vault data" | "skills not available"
+--- local stats, err  = ccvault.getPlayerStats(player)            -- { [attributeId] = { name, value, display, limit?, uncapped?, hitLimit?, extra? } } | nil, "player offline" | "stats not available"
 --- local limits     = ccvault.getLimits()                       -- { maxTransferAmount=, maxBatchMoves=, maxWatchesPerComputer=, containerItems=, identify=, ... }
 --- local used, limit = vhcc.getUsage()                          -- bytes used by this computer's vhcc folder, and its allowance

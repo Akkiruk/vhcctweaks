@@ -34,7 +34,42 @@ final class PlayerEquipment {
             worn.put(EquipmentShape.SLOTS[i], detail(player.getItemBySlot(WORN[i])));
         }
         Map<String, List<Map<String, ?>>> curios = ModList.get().isLoaded("curios") ? Curios.read(player) : Map.of();
-        return EquipmentShape.build(worn, curios);
+        Map<String, Object> result = EquipmentShape.build(worn, curios);
+        hotbar(player, result);
+        return result;
+    }
+
+    /**
+     * 2.2.37: the hotbar, which slot is held, and the hotbar weapon Gear Power counts, which is not always the held
+     * one. The weapon is Vault Hunters' own pick, from its Gear Power explanation.
+     */
+    private static void hotbar(ServerPlayer player, Map<String, Object> result) {
+        Map<Integer, Object> hotbar = new HashMap<>();
+        for (int i = 0; i < 9; i++) {
+            Map<String, ?> detail = detail(player.getInventory().getItem(i));
+            if (detail != null) hotbar.put(i + 1, detail);
+        }
+        result.put("hotbar", hotbar);
+        int selected = player.getInventory().selected;
+        if (selected >= 0 && selected < 9) result.put("selectedHotbarSlot", selected + 1);
+        Integer weapon = VaultPlayers.attempt("counted weapon", () -> CountedWeapon.hotbarSlot(player));
+        if (weapon != null && weapon >= 0 && weapon < 9) {
+            Map<String, ?> detail = detail(player.getInventory().getItem(weapon));
+            if (detail != null) {
+                result.put("weapon", detail);
+                result.put("weaponHotbarSlot", weapon + 1);
+            }
+        }
+    }
+
+    /** Names the 3.21.74 classes, so an older Vault Hunters fails inside attempt. */
+    private static final class CountedWeapon {
+        static Integer hotbarSlot(ServerPlayer player) {
+            for (iskallia.vault.gear.power.GearPowerBreakdown.SlotBreakdown slot : iskallia.vault.gear.power.GearPower.explain(player).slots()) {
+                if (slot.slot() == EquipmentSlot.MAINHAND) return slot.hotbarSlot() >= 0 ? slot.hotbarSlot() : null;
+            }
+            return null;
+        }
     }
 
     static Map<String, ?> detail(ItemStack stack) {

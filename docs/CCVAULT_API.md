@@ -13,6 +13,9 @@ The whole contract is in `docs/SPEC_2_2_37.md`. Built against Vault Hunters 3.21
 - `ccvault.getPlayerTemper(player)`: Dust, and the level and multiplier of Might, Magic, Vigor and Tool.
 - `ccvault.getPlayerReputation(player)`: reputation with each vault god.
 - `ccvault.getLimits()`: the server's limits, so a program does not have to guess them.
+- `ccvault.getPlayerSkills(player)`: abilities with their specialization and level, talents, expertises and prestige powers. Offline from the saved profile.
+- `ccvault.getPlayerStats(player)`: an online player's stat screen totals, with each capped stat's cap. `getLimits().statCaps` has the coded caps.
+- `getPlayerEquipment` also says which hotbar weapon Gear Power counts (`weapon`, `weaponHotbarSlot`) and gives the whole `hotbar`.
 - Inventories can `identify(slot, player [, innerSlot])` Vault Hunters gear the way the Identification Stand does for that player. The player has to be online and have approved the computer with `ccvault.requestAuth()`, the same approval `"player:Name"` uses. See `docs/SPEC_2_2_37.md` section 8.
 - Inventories can look into backpacks and shulker boxes in their slots with `listContents(slot)` and move things out with `pushContents` or a `moveMany` move with `inner`. Section 7 of the spec.
 - See [Player Vault Data](#player-vault-data) below. Item details gained a per-piece `gearScore`; see `docs/VAULT_ITEM_API.md`.
@@ -153,6 +156,8 @@ end
 | `ccvault.getPlayerGearPower(player)` | `table` \| `nil, error` | No |
 | `ccvault.getPlayerTemper(player)` | `table` \| `nil, error` | No |
 | `ccvault.getPlayerReputation(player)` | `table` \| `nil, error` | No |
+| `ccvault.getPlayerSkills(player)` | `table` \| `nil, error` | No |
+| `ccvault.getPlayerStats(player)` | `table` \| `nil, error` | No |
 
 `player` is a name or a UUID string, resolved like `getPlayerBalance`. All of these are read-only and need no approval, touch or range. The first call for a name the server has not seen can return `nil, "looking up player 'Name' - try again"`. A name nobody has is `nil, "unknown player"`.
 
@@ -209,6 +214,34 @@ local temper, err = ccvault.getPlayerTemper("Akkiruk")
 
 **God reputation.** `getPlayerReputation` returns `{ velara =, tenos =, wendarr =, idona = }` for an online player. Errors of its own: `"player offline"`, `"reputation not available"`.
 
+**Skills** (2.2.37). `getPlayerSkills` works online and offline (offline from the saved profile, `online = false`):
+
+```lua
+local skills = ccvault.getPlayerSkills("Akkiruk")
+-- skills.abilities[1]  = { id = <ability id>, name = <shown name>, specialization = <chosen spec id>,
+--                          specializationName = <its name>, specializationIndex = 2,   -- 0 is the plain ability
+--                          level = 5, learned = 4, maxLevel = 5, selected = true }
+-- skills.talents[1]    = { id =, name =, level =, learned =, maxLevel = }
+-- skills.expertises, skills.prestige: the same shape
+-- skills.spentPoints   = { abilities =, talents =, expertises =, prestige = }
+```
+
+`level` includes gear bonuses (only known online; offline it equals `learned`). Errors of its own: `"no vault data"`, `"skills not available"`.
+
+**Stat totals** (2.2.37). `getPlayerStats` gives an online player's stat screen, keyed by attribute id:
+
+```lua
+local stats = ccvault.getPlayerStats("Akkiruk")
+local cdr = stats["the_vault:cooldown_reduction"]
+-- cdr = { name = "Cooldown Reduction", value = 0.8, display = "80%", limit = 0.8, uncapped = 0.87, hitLimit = true }
+```
+
+`limit`, `uncapped` and `hitLimit` are only on capped stats. Errors of its own: `"player offline"`, `"stats not available"`.
+
+**The counted weapon** (2.2.37). `getPlayerEquipment` also has `hotbar = { [1..9] = detail }`, `selectedHotbarSlot`, and `weapon` with `weaponHotbarSlot`: the hotbar weapon Gear Power counts, which isn't always the one in hand.
+
+The contract for these is `docs/SPEC_2_2_37.md` section 9.
+
 ---
 
 ### Server Limits
@@ -224,7 +257,8 @@ local limits = ccvault.getLimits()
 -- limits.maxLinksPerComputer, limits.maxBatchMoves, limits.batchTimeBudgetMicros,
 -- limits.maxWatchesPerComputer, limits.vhccMaxBytesPerComputer,
 -- limits.gearScoreInDetails, limits.gearScoreLinesInDetails,
--- limits.containerItems, limits.identify
+-- limits.containerItems, limits.identify,
+-- limits.statCaps = { ["the_vault:cooldown_reduction"] = { base = 0.8, max = 0.95 }, ... }
 ```
 
 These are the server config values. A value that cannot be read is absent, so give each a fallback.

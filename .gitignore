@@ -27,3 +27,9 @@ Thumbs.db
 # Misc
 *.class
 ap-source/
+
+AGENTS.md
+CLAUDE.md
+.claude/
+.github/copilot-instructions.md
+.github/instructions/

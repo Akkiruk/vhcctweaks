@@ -6,29 +6,6 @@ All notable changes to VH CC Tweaks are documented here.
 
 - No changes yet.
 
-## [2.2.38] - 2026-11-22
-
-This is stuff that was meant to be in 2.2.37 and got left out of the jar. Server only, players don't need to update.
-
-### Inventories
-
-- Computers can look inside a backpack or shulker box that's sitting in a chest. `listContents(slot)` lists what's in it, pass `true` as the second argument to get full item details.
-- `pushContents(to, slot, innerSlot)` pulls stuff out of it without taking the backpack out first. Works like `pushItems`. In `moveMany` add `inner = n` to a move.
-- Sophisticated Backpacks go through their own handler, so filter upgrades still decide what can leave. Vault barrels you picked up with stuff inside work too.
-- `identify(slot, player)` identifies gear in a chest the same way the Identification Stand would for that player, so their legendary expertise and model discoveries count. They have to be online and have approved the computer. Also works on gear inside a backpack with a third argument.
-- Server owners can turn either off with `inventory.containerItems` and `inventory.identify`.
-
-### Players
-
-- `ccvault.getPlayerSkills(player)` lists someone's abilities (with the specialization they picked and the level, gear bonus included), talents, expertises and prestige powers. Works offline too, from their saved data, just without the gear bonus.
-- `ccvault.getPlayerStats(player)` gives the numbers off the stat screen. Ability power, cooldown reduction, resistance, block, lucky hit, health and the rest, worked out by the game. Capped ones tell you the cap and whether they're over it. Online only.
-- `getPlayerEquipment` now has the whole hotbar and says which weapon Gear Power is actually counting. Before this you only got whatever they had in hand.
-- `getLimits().statCaps` has the normal caps (80% cooldown, 60% block, 50% resistance and so on) and how high they can go.
-
-### Vault item details
-
-- Number rolls also get `naturalBestAtLevel`/`naturalWorstAtLevel` for the piece's own level, so a level 40 piece isn't compared against level 100 rolls.
-
 ## [2.2.37] - 2026-11-17
 
 Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temper and Dust. Computers can read all of it now. Needs 3.21.74 on the server. On an older Vault Hunters the new stuff just isn't there, nothing breaks.
@@ -44,12 +21,16 @@ Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temp
 - `ccvault.getPlayerTemper(player)` gives Dust, and the level and multiplier for Might, Magic, Vigor and Tool. Works offline too.
 - `ccvault.getPlayerReputation(player)` gives reputation with Velara, Tenos, Wendarr and Idona. Online players only.
 - Levels go past 100 now. `getPlayerVaultLevel` already returned the real number, so nothing to change there. Gear still stops at 100.
+- `ccvault.getPlayerSkills(player)` lists someone's abilities (with the specialization they picked and the level, gear bonus included), talents, expertises and prestige powers. Works offline too, from their saved data, just without the gear bonus.
+- `ccvault.getPlayerStats(player)` gives the numbers off the stat screen. Ability power, cooldown reduction, resistance, block, lucky hit, health and the rest, worked out by the game. Capped ones tell you the cap and whether they're over it. Online only.
+- `getPlayerEquipment` now has the whole hotbar and says which weapon Gear Power is actually counting. Before this you only got whatever they had in hand.
+- `getLimits().statCaps` has the normal caps (80% cooldown, 60% block, 50% resistance and so on) and how high they can go.
 - Same rule as before for networks: somebody on another server isn't online here, they're read from what this server has saved.
 
 ### Vault item details
 
 - Every identified piece of gear has its own `gearScore`, worked out by the game's own scorer. Around 1000 is a perfect OMEGA piece, legendary rolls can go over. `gearScoreStatus` says if it counts at all, a broken piece is `INERT`.
-- Each modifier on that piece has `scoreRatio` and `scorePoints`, so you can see which roll is carrying it. Number rolls also get `naturalBest` and `naturalWorst`.
+- Each modifier on that piece has `scoreRatio` and `scorePoints`, so you can see which roll is carrying it. Number rolls also get `naturalBest` and `naturalWorst`, and `naturalBestAtLevel`/`naturalWorstAtLevel` for the piece's own level, so a level 40 piece isn't compared against level 100 rolls.
 - `isLegendary` shows up on unidentified gear that's flagged legendary. On identified gear it's also true when a modifier is legendary, which the old flag missed for pieces that rolled one by luck.
 - `greedTier` on gear an Etching locked to a greed tier. It used to be a nameless entry in `attributes`.
 - Heal on Kill and Heal on Block say which number is which: `chance` and `amount`. `first` and `second` are still there.
@@ -57,6 +38,14 @@ Catch-up for Vault Hunters 3.21.74, the update with Gear Score, Gear Power, Temp
 - Modifiers have `attribute`, the registry id like `the_vault:summon_damage`. Use that as a key, the display name can change.
 - Jewels have `size`, `state` and `identified`. Tools have `capacity`, `hammerSize`, `material`, `state`, `identified`, `isSoulbound` and `craftingPotential`. Before this a sorter had to dig the jewel size out of the modifier list, and tools and jewels never said if they were identified.
 - Don't want the score work on every item read? `vaultDetails.gearScore` and `vaultDetails.gearScoreLines` in the server config turn it off.
+
+### Inventories
+
+- Computers can look inside a backpack or shulker box that's sitting in a chest. `listContents(slot)` lists what's in it, pass `true` as the second argument to get full item details.
+- `pushContents(to, slot, innerSlot)` pulls stuff out of it without taking the backpack out first. Works like `pushItems`. In `moveMany` add `inner = n` to a move.
+- Sophisticated Backpacks go through their own handler, so filter upgrades still decide what can leave. Vault barrels you picked up with stuff inside work too.
+- `identify(slot, player)` identifies gear in a chest the same way the Identification Stand would for that player, so their legendary expertise and model discoveries count. They have to be online and have approved the computer. Also works on gear inside a backpack with a third argument.
+- Server owners can turn either off with `inventory.containerItems` and `inventory.identify`.
 
 ### Small stuff
 
